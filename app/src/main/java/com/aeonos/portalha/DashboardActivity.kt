@@ -15,6 +15,7 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private lateinit var drawer: DrawerLayout
     private lateinit var prefs: Prefs
+    private var dismissRetries = 0
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,6 +42,8 @@ class DashboardActivity : AppCompatActivity() {
                 android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
+        @Suppress("DEPRECATION")
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
 
         enableImmersive()   // kiosk: hide the system nav/status bars
 
@@ -144,21 +147,37 @@ class DashboardActivity : AppCompatActivity() {
     // switches) — re-assert it whenever we regain focus.
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) enableImmersive()
+        if (hasFocus) {
+            enableImmersive()
+            webView.requestFocus()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                android.view.WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
+        @Suppress("DEPRECATION")
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
     }
 
     override fun onResume() {
         super.onResume()
         enableImmersive()
 
-        // Dismiss the keyguard/lock screen so the dashboard is immediately interactive
-        val km = getSystemService(android.app.KeyguardManager::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            km.requestDismissKeyguard(this, null)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
-        }
+        dismissRetries = 0
+        dismissKeyguard()
+        webView.requestFocus()
 
         // Re-acquire the camera if another app (e.g. the Portal launcher) took
         // it while we were in the background.
@@ -168,6 +187,44 @@ class DashboardActivity : AppCompatActivity() {
         val current = webView.url ?: ""
         if (url.isNotEmpty() && !current.startsWith(normalise(url).trimEnd('/'))) {
             loadDashboard()
+        }
+    }
+
+    private fun dismissKeyguard() {
+        val km = getSystemService(android.app.KeyguardManager::class.java) ?: return
+        if (!km.isKeyguardLocked) {
+            android.util.Log.d("PortalHA", "Keyguard is not locked, no need to dismiss")
+            dismissRetries = 0
+            return
+        }
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            km.requestDismissKeyguard(this, object : android.app.KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissError() {
+                    android.util.Log.w("PortalHA", "Keyguard dismiss error (retry $dismissRetries/5)")
+                    retryDismiss()
+                }
+                override fun onDismissSucceeded() {
+                    android.util.Log.i("PortalHA", "Keyguard dismiss succeeded")
+                    dismissRetries = 0
+                }
+                override fun onDismissCancelled() {
+                    android.util.Log.w("PortalHA", "Keyguard dismiss cancelled (retry $dismissRetries/5)")
+                    retryDismiss()
+                }
+            })
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+        }
+    }
+
+    private fun retryDismiss() {
+        if (dismissRetries < 5) {
+            dismissRetries++
+            webView.postDelayed({ dismissKeyguard() }, 500L)
+        } else {
+            android.util.Log.e("PortalHA", "Keyguard dismiss failed after max retries")
+            dismissRetries = 0
         }
     }
 

@@ -88,6 +88,7 @@ class BridgeService : Service() {
     }
 
     private val running = AtomicBoolean(false)
+    private val mainHandler = Handler(Looper.getMainLooper())
     // Paho's callback thread must never block: a synchronous publish() from inside
     // messageArrived deadlocks the client — QoS 0 token completion is dispatched by
     // that same callback thread. All inbound commands run on this executor instead.
@@ -364,11 +365,30 @@ class BridgeService : Service() {
     // SYSTEM_ALERT_WINDOW permission exempts this from background-start limits.
     // DashboardActivity is singleTask, so this reuses the existing instance.
     private fun reclaimForeground() {
-        runCatching {
-            startActivity(Intent(this, DashboardActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            })
-        }.onFailure { Log.w(TAG, "reclaimForeground failed: ${it.message}") }
+        bringDashboardToFront()
+    }
+
+    private fun bringDashboardToFront() {
+        val launchIntent = Intent(this, DashboardActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        val triggerLaunch = object : Runnable {
+            override fun run() {
+                if (!screenOn) {
+                    Log.d(TAG, "bringDashboardToFront: screen is off, skipping launch")
+                    return
+                }
+                runCatching {
+                    startActivity(launchIntent)
+                    Log.i(TAG, "bringDashboardToFront: startActivity called successfully")
+                }.onFailure { Log.w(TAG, "failed to bring DashboardActivity to front: ${it.message}") }
+            }
+        }
+        // Launch immediately
+        triggerLaunch.run()
+        // Queue delayed launches to override launcher/ambient-mode takeover
+        mainHandler.postDelayed(triggerLaunch, 500L)
+        mainHandler.postDelayed(triggerLaunch, 1000L)
     }
 
     private fun registerAudioReceiver() {
@@ -914,7 +934,11 @@ class BridgeService : Service() {
 
     private fun onPresenceChange(present: Boolean) {
         val p = prefs ?: return
-        if (present) lastActivityMs = System.currentTimeMillis()  // presence keeps the screen awake
+        if (present) {
+            lastActivityMs = System.currentTimeMillis()  // presence keeps the screen awake
+            ScreenControl.wake(this)
+            bringDashboardToFront()
+        }
         publishRaw(HaDiscovery.presenceStateTopic(p.deviceId), if (present) "ON" else "OFF", 1, retained = true)
     }
 
