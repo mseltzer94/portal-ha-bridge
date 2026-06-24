@@ -15,6 +15,7 @@ class DisplaySettingsActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private lateinit var swPresence: Switch
     private lateinit var swTimeout: Switch
+    private lateinit var swDarkMode: Switch
     private lateinit var etMinutes: EditText
     private lateinit var tvPresenceStatus: TextView
     private lateinit var etTempOffset: EditText
@@ -31,6 +32,7 @@ class DisplaySettingsActivity : AppCompatActivity() {
 
         swPresence = findViewById(R.id.sw_presence)
         swTimeout = findViewById(R.id.sw_screen_timeout)
+        swDarkMode = findViewById(R.id.sw_dark_mode)
         etMinutes = findViewById(R.id.et_timeout_minutes)
         tvPresenceStatus = findViewById(R.id.tv_presence_status)
         etTempOffset = findViewById(R.id.et_temp_offset)
@@ -61,6 +63,16 @@ class DisplaySettingsActivity : AppCompatActivity() {
             Toast.makeText(this,
                 if (checked) "Screen will turn off when idle" else "Screen will stay on",
                 Toast.LENGTH_SHORT).show()
+        }
+
+        swDarkMode.setOnCheckedChangeListener { _, checked ->
+            if (checked == prefs.forceDarkMode) return@setOnCheckedChangeListener
+            prefs.forceDarkMode = checked
+            androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(
+                if (checked) androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES
+                else androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_NO
+            )
+            updateUi()
         }
 
         etMinutes.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) saveMinutes() }
@@ -104,6 +116,7 @@ class DisplaySettingsActivity : AppCompatActivity() {
     private fun updateUi() {
         swPresence.isChecked = prefs.presenceEnabled
         swTimeout.isChecked = prefs.screenTimeoutEnabled
+        swDarkMode.isChecked = prefs.forceDarkMode
         if (etMinutes.text.toString() != prefs.screenTimeoutMinutes.toString())
             etMinutes.setText(prefs.screenTimeoutMinutes.toString())
         findViewById<View>(R.id.row_timeout_mins).alpha = if (prefs.screenTimeoutEnabled) 1f else 0.4f

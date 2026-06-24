@@ -31,6 +31,14 @@ class Prefs(private val context: Context) {
         get() = sp.getString("password", "") ?: ""
         set(v) = sp.edit().putString("password", v).apply()
 
+    var rtspUsername: String
+        get() = sp.getString("rtsp_username", "") ?: ""
+        set(v) = sp.edit().putString("rtsp_username", v).apply()
+
+    var rtspPassword: String
+        get() = sp.getString("rtsp_password", "") ?: ""
+        set(v) = sp.edit().putString("rtsp_password", v).apply()
+
     var deviceName: String
         get() = sp.getString("device_name", "Portal") ?: "Portal"
         set(v) = sp.edit().putString("device_name", v).apply()
@@ -123,6 +131,14 @@ class Prefs(private val context: Context) {
     var haUrl: String
         get() = sp.getString("ha_url", "") ?: ""
         set(v) = sp.edit().putString("ha_url", v).apply()
+
+    var forceDarkMode: Boolean
+        get() = sp.getBoolean("force_dark_mode", false)
+        set(v) = sp.edit().putBoolean("force_dark_mode", v).apply()
+
+    var cameraPrivacyMode: Boolean
+        get() = sp.getBoolean("camera_privacy_mode", false)
+        set(v) = sp.edit().putBoolean("camera_privacy_mode", v).apply()
 
     val brokerUri: String get() = "tcp://$brokerHost:$brokerPort"
 }

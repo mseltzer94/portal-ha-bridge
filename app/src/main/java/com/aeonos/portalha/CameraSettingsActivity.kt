@@ -14,9 +14,14 @@ class CameraSettingsActivity : AppCompatActivity() {
     private lateinit var swService: Switch
     private lateinit var swMotion: Switch
     private lateinit var swStream: Switch
+    private lateinit var swPrivacyMode: Switch
     private lateinit var btnCameraPower: Button
     private lateinit var btnRotate: Button
     private lateinit var tvCameraUrl: TextView
+    private lateinit var layoutRtspAuth: View
+    private lateinit var etRtspUser: android.widget.EditText
+    private lateinit var etRtspPass: android.widget.EditText
+    private lateinit var btnSaveRtspAuth: Button
 
     // Live-sync the UI when the service changes prefs (HA commands, cascades).
     // Android dispatches these on the main thread; held as a field because
@@ -32,11 +37,26 @@ class CameraSettingsActivity : AppCompatActivity() {
         swService = findViewById(R.id.sw_camera_service)
         swMotion = findViewById(R.id.sw_motion)
         swStream = findViewById(R.id.sw_stream)
+        swPrivacyMode = findViewById(R.id.sw_privacy_mode)
         btnCameraPower = findViewById(R.id.btn_camera_power)
         btnRotate = findViewById(R.id.btn_rotate)
         tvCameraUrl = findViewById(R.id.tv_camera_url)
+        layoutRtspAuth = findViewById(R.id.layout_rtsp_auth)
+        etRtspUser = findViewById(R.id.et_rtsp_user)
+        etRtspPass = findViewById(R.id.et_rtsp_pass)
+        btnSaveRtspAuth = findViewById(R.id.btn_save_rtsp_auth)
+
+        etRtspUser.setText(prefs.rtspUsername)
+        etRtspPass.setText(prefs.rtspPassword)
 
         findViewById<Button>(R.id.btn_back).setOnClickListener { finish() }
+
+        btnSaveRtspAuth.setOnClickListener {
+            prefs.rtspUsername = etRtspUser.text.toString().trim()
+            prefs.rtspPassword = etRtspPass.text.toString().trim()
+            updateUi()
+            restartService("RTSP credentials updated")
+        }
 
         btnRotate.setOnClickListener {
             prefs.streamRotation = (prefs.streamRotation + 90) % 360
@@ -80,6 +100,11 @@ class CameraSettingsActivity : AppCompatActivity() {
             restartService(if (checked) "RTSP streaming enabled" else "RTSP streaming disabled")
         }
 
+        swPrivacyMode.setOnCheckedChangeListener { _, checked ->
+            if (checked == prefs.cameraPrivacyMode) return@setOnCheckedChangeListener
+            BridgeService.setPrivacyMode(this, checked)
+        }
+
         btnCameraPower.setOnClickListener {
             val on = !prefs.cameraOn
             prefs.cameraOn = on
@@ -113,10 +138,12 @@ class CameraSettingsActivity : AppCompatActivity() {
         swService.isChecked = serviceOn
         swMotion.isChecked = prefs.motionEnabled
         swStream.isChecked = prefs.streamEnabled
+        swPrivacyMode.isChecked = prefs.cameraPrivacyMode
 
         // Sub-controls only make sense while the service is enabled
         swMotion.isEnabled = serviceOn
         swStream.isEnabled = serviceOn
+        swPrivacyMode.isEnabled = serviceOn && prefs.streamEnabled
 
         btnCameraPower.visibility = if (serviceOn) View.VISIBLE else View.GONE
         btnCameraPower.text = if (prefs.cameraOn) "Turn Camera Off" else "Turn Camera On"
@@ -125,16 +152,22 @@ class CameraSettingsActivity : AppCompatActivity() {
         btnRotate.visibility = if (serviceOn) View.VISIBLE else View.GONE
         btnRotate.text = "Rotate Stream (currently ${prefs.streamRotation}°)"
 
-        if (serviceOn && prefs.streamEnabled) {
+        val showRtspAuth = serviceOn && prefs.streamEnabled
+        layoutRtspAuth.visibility = if (showRtspAuth) View.VISIBLE else View.GONE
+
+        if (showRtspAuth) {
             val ip = BridgeService.localIp() ?: "<device-ip>"
+            val rtspUsername = prefs.rtspUsername
+            val rtspPassword = prefs.rtspPassword
+            val userPart = if (rtspUsername.isNotEmpty() && rtspPassword.isNotEmpty()) "$rtspUsername:$rtspPassword@" else ""
             tvCameraUrl.text =
                 "Home Assistant — use the WebRTC Camera\n" +
                 "card (custom:webrtc-camera). Add a card:\n\n" +
                 "type: custom:webrtc-camera\n" +
-                "url: 'ffmpeg:rtsp://$ip:8554/#video=copy'\n\n" +
+                "url: 'ffmpeg:rtsp://$userPart$ip:8554/#video=copy'\n\n" +
                 "#video=copy drops the audio track WebRTC\n" +
                 "can't decode (prevents the 1-frame freeze).\n\n" +
-                "Raw RTSP (VLC etc.): rtsp://$ip:8554/"
+                "Raw RTSP (VLC etc.): rtsp://$userPart$ip:8554/"
             tvCameraUrl.visibility = View.VISIBLE
         } else {
             tvCameraUrl.visibility = View.GONE

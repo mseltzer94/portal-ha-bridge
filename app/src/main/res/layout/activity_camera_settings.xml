@@ -96,6 +96,74 @@
             android:textColor="@color/hint"
             android:layout_marginBottom="12dp" />
 
+        <Switch
+            android:id="@+id/sw_privacy_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Camera Privacy Mode"
+            android:textSize="15sp"
+            android:textColor="@color/onSurface"
+            android:paddingVertical="12dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="When enabled, instead of stopping the RTSP stream, the camera displays a black screen with 'PRIVACY MODE' overlay text."
+            android:textSize="12sp"
+            android:textColor="@color/hint"
+            android:layout_marginBottom="12dp" />
+
+        <!-- RTSP Stream Credentials -->
+        <LinearLayout
+            android:id="@+id/layout_rtsp_auth"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="16dp"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RTSP Stream Credentials (Optional)"
+                android:textSize="14sp"
+                android:textColor="@color/colorAccent"
+                android:layout_marginBottom="8dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/et_rtsp_user"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Username"
+                    android:inputType="text"
+                    android:textColor="@color/onSurface"
+                    android:layout_marginEnd="8dp" />
+
+                <EditText
+                    android:id="@+id/et_rtsp_pass"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Password"
+                    android:inputType="textPassword"
+                    android:textColor="@color/onSurface" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btn_save_rtsp_auth"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Save &amp; Apply Credentials"
+                android:backgroundTint="#37474F"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+
         <Button
             android:id="@+id/btn_rotate"
             android:layout_width="match_parent"

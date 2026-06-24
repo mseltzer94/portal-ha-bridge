@@ -41,6 +41,8 @@ class BridgeService : Service() {
         private const val EXTRA_ROTATION = "rotation"
         private const val ACTION_ENSURE_CAMERA = "com.aeonos.portalha.ENSURE_CAMERA"
         private const val ACTION_APPLY_DISPLAY = "com.aeonos.portalha.APPLY_DISPLAY"
+        private const val ACTION_SET_PRIVACY_MODE = "com.aeonos.portalha.SET_PRIVACY_MODE"
+        private const val EXTRA_PRIVACY_MODE = "privacy_mode"
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, BridgeService::class.java))
@@ -57,6 +59,11 @@ class BridgeService : Service() {
         fun setRotation(context: Context, degrees: Int) =
             context.startForegroundService(Intent(context, BridgeService::class.java)
                 .setAction(ACTION_SET_ROTATION).putExtra(EXTRA_ROTATION, degrees))
+
+        // Apply a new privacy mode state to the live camera.
+        fun setPrivacyMode(context: Context, enabled: Boolean) =
+            context.startForegroundService(Intent(context, BridgeService::class.java)
+                .setAction(ACTION_SET_PRIVACY_MODE).putExtra(EXTRA_PRIVACY_MODE, enabled))
 
         // Re-acquire the camera if it should be on but was evicted (e.g. another
         // app grabbed it while we were backgrounded). Called on activity resume.
@@ -241,6 +248,14 @@ class BridgeService : Service() {
                 cameraStream?.rotation = deg                    // motion path (live)
                 rtspStreamer?.let { it.rotationOffset = deg; if (it.isStreaming) it.restart() }
                 Log.i(TAG, "manual rotation offset set to $deg deg")
+            }
+        }
+        if (intent?.action == ACTION_SET_PRIVACY_MODE) {
+            val enabled = intent.getBooleanExtra(EXTRA_PRIVACY_MODE, false)
+            val p = prefs ?: Prefs(this).also { prefs = it }
+            commandExecutor.submit {
+                runCatching { handleCameraPrivacyModeCommand(if (enabled) "ON" else "OFF", p) }
+                    .onFailure { Log.w(TAG, "in-app privacy mode toggle failed: ${it.message}") }
             }
         }
         if (intent?.action == ACTION_ENSURE_CAMERA) {
@@ -450,6 +465,7 @@ class BridgeService : Service() {
             if (p.cameraServiceEnabled) HaDiscovery.motionSensitivityCommandTopic(p.deviceId) else null,
             if (p.cameraServiceEnabled) HaDiscovery.motionEnableCommandTopic(p.deviceId) else null,
             if (p.cameraServiceEnabled) HaDiscovery.streamEnableCommandTopic(p.deviceId) else null,
+            if (p.cameraServiceEnabled) HaDiscovery.cameraPrivacyModeCommandTopic(p.deviceId) else null,
             HaDiscovery.presenceEnableCommandTopic(p.deviceId),
             HaDiscovery.screenTimeoutCommandTopic(p.deviceId),
             HaDiscovery.screenTimeoutMinsCommandTopic(p.deviceId),
@@ -544,10 +560,12 @@ class BridgeService : Service() {
             pub(HaDiscovery.cameraDiscoveryTopic(p.deviceId), HaDiscovery.cameraConfigPayload(p.deviceId, p.deviceName))
             pub(HaDiscovery.motionEnableDiscoveryTopic(p.deviceId), HaDiscovery.motionEnableConfigPayload(p.deviceId, p.deviceName))
             pub(HaDiscovery.streamEnableDiscoveryTopic(p.deviceId), HaDiscovery.streamEnableConfigPayload(p.deviceId, p.deviceName))
+            pub(HaDiscovery.cameraPrivacyModeDiscoveryTopic(p.deviceId), HaDiscovery.cameraPrivacyModeConfigPayload(p.deviceId, p.deviceName))
         } else {
             client.publish(HaDiscovery.cameraDiscoveryTopic(p.deviceId), emptyRetained())
             client.publish(HaDiscovery.motionEnableDiscoveryTopic(p.deviceId), emptyRetained())
             client.publish(HaDiscovery.streamEnableDiscoveryTopic(p.deviceId), emptyRetained())
+            client.publish(HaDiscovery.cameraPrivacyModeDiscoveryTopic(p.deviceId), emptyRetained())
         }
         if (p.cameraServiceEnabled && p.motionEnabled) {
             pub(HaDiscovery.motionDiscoveryTopic(p.deviceId), HaDiscovery.motionConfigPayload(p.deviceId, p.deviceName))
@@ -609,6 +627,7 @@ class BridgeService : Service() {
             HaDiscovery.motionSensitivityCommandTopic(p.deviceId) -> handleMotionSensitivityCommand(payload, p)
             HaDiscovery.motionEnableCommandTopic(p.deviceId)      -> handleMotionEnableCommand(payload, p)
             HaDiscovery.streamEnableCommandTopic(p.deviceId)      -> handleStreamEnableCommand(payload, p)
+            HaDiscovery.cameraPrivacyModeCommandTopic(p.deviceId) -> handleCameraPrivacyModeCommand(payload, p)
             HaDiscovery.presenceEnableCommandTopic(p.deviceId)    -> handlePresenceEnableCommand(payload, p)
             HaDiscovery.screenTimeoutCommandTopic(p.deviceId)     -> handleScreenTimeoutCommand(payload, p)
             HaDiscovery.screenTimeoutMinsCommandTopic(p.deviceId) -> handleScreenTimeoutMinsCommand(payload, p)
@@ -739,6 +758,14 @@ class BridgeService : Service() {
                 applyFeatureState(p); applyCameraState(p)
             }
         }
+    }
+
+    private fun handleCameraPrivacyModeCommand(payload: String, p: Prefs) {
+        if (!p.cameraServiceEnabled) { Log.w(TAG, "privacy mode cmd ignored — camera service disabled"); return }
+        val active = payload.uppercase() == "ON"
+        p.cameraPrivacyMode = active
+        publishRaw(HaDiscovery.cameraPrivacyModeStateTopic(p.deviceId), if (active) "ON" else "OFF", 1, retained = true)
+        rtspStreamer?.applyPrivacyMode(active)
     }
 
     // Single authority for Camera 0 ownership. RTSP streaming and motion are
@@ -932,6 +959,7 @@ class BridgeService : Service() {
     private fun publishFeatureSwitchStates(p: Prefs) {
         publishRaw(HaDiscovery.motionEnableStateTopic(p.deviceId), if (p.motionEnabled) "ON" else "OFF", 1, retained = true)
         publishRaw(HaDiscovery.streamEnableStateTopic(p.deviceId), if (p.streamEnabled) "ON" else "OFF", 1, retained = true)
+        publishRaw(HaDiscovery.cameraPrivacyModeStateTopic(p.deviceId), if (p.cameraPrivacyMode) "ON" else "OFF", 1, retained = true)
     }
 
     // ── State publishers ──────────────────────────────────────────────────────

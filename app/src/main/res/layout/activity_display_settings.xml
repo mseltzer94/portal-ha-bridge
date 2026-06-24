@@ -116,6 +116,25 @@
                 android:textColor="@color/onSurface" />
         </LinearLayout>
 
+        <!-- Dark Mode Dashboard -->
+        <Switch
+            android:id="@+id/sw_dark_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Dark Mode Dashboard"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/onSurface"
+            android:paddingVertical="12dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Forces the WebView to request dark mode from Home Assistant (updates prefers-color-scheme: dark)."
+            android:textSize="12sp"
+            android:textColor="@color/hint"
+            android:layout_marginBottom="16dp" />
+
         <!-- Temperature calibration (only shown if the device has the sensor) -->
         <LinearLayout
             android:id="@+id/section_temp"

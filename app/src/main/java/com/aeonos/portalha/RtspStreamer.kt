@@ -10,6 +10,12 @@ import com.pedro.library.util.sources.audio.MicrophoneSource
 import com.pedro.library.util.sources.audio.NoAudioSource
 import com.pedro.library.util.sources.video.Camera2Source
 import com.pedro.rtspserver.RtspServerStream
+import com.pedro.encoder.input.gl.render.filters.BlackFilterRender
+import com.pedro.encoder.input.gl.render.filters.`object`.TextObjectFilterRender
+import com.pedro.encoder.utils.gl.TranslateTo
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.Point
 
 // Headless camera -> H.264 (+ optional AAC) -> RTSP server. RtspServerStream is
 // the source-based (no preview view) variant, so it runs in our background
@@ -45,7 +51,13 @@ class RtspStreamer(private val context: Context, private val port: Int = 8554) :
     private var baseBitrate = 2_000_000
     private var baseAudio = true
 
-    fun url() = "rtsp://${BridgeService.localIp() ?: "0.0.0.0"}:$port/"
+    fun url(): String {
+        val prefs = Prefs(context)
+        val user = prefs.rtspUsername
+        val pass = prefs.rtspPassword
+        val auth = if (user.isNotEmpty() && pass.isNotEmpty()) "$user:$pass@" else ""
+        return "rtsp://$auth${BridgeService.localIp() ?: "0.0.0.0"}:$port/"
+    }
 
     private fun currentRotation(): Int = (((rotationOffset + autoRotation) % 360) + 360) % 360
 
@@ -103,8 +115,15 @@ class RtspStreamer(private val context: Context, private val port: Int = 8554) :
             // NoAudioSource (NoAudioSource just means no mic is opened, no data fed).
             val audioOk = s.prepareAudio(16000, false, 64_000)
             if (videoOk && audioOk) {
+                val prefs = Prefs(context)
+                if (prefs.rtspUsername.isNotEmpty() && prefs.rtspPassword.isNotEmpty()) {
+                    s.getStreamClient().setAuthorization(prefs.rtspUsername, prefs.rtspPassword)
+                }
                 s.startStream()
                 isStreaming = true
+                if (prefs.cameraPrivacyMode) {
+                    applyPrivacyMode(true)
+                }
                 Log.i(TAG, "RTSP streaming on ${url()} ${encW}x${encH} rot=$rot squash=$squashedFrontCam (audio=$withAudio)")
                 true
             } else {
@@ -133,6 +152,26 @@ class RtspStreamer(private val context: Context, private val port: Int = 8554) :
         runCatching { stream?.stopStream() }
         stream = null
         Log.i(TAG, "RTSP streaming stopped")
+    }
+
+    fun applyPrivacyMode(enabled: Boolean) {
+        val s = stream ?: return
+        if (!s.isStreaming) return
+        val gl = s.getGlInterface()
+        gl.clearFilters()
+        if (enabled) {
+            val blackFilter = BlackFilterRender()
+            val textFilter = TextObjectFilterRender()
+            textFilter.setText("PRIVACY ENABLED", 28f, Color.parseColor("#FF5722"), Typeface.DEFAULT_BOLD)
+            val size = gl.getEncoderSize()
+            textFilter.setDefaultScale(size.x, size.y)
+            textFilter.setPosition(TranslateTo.CENTER)
+            gl.addFilter(blackFilter)
+            gl.addFilter(textFilter)
+            Log.i(TAG, "Privacy mode filters applied")
+        } else {
+            Log.i(TAG, "Privacy mode filters cleared")
+        }
     }
 
     override fun onConnectionStarted(url: String) { Log.i(TAG, "rtsp client connecting: $url") }

@@ -231,6 +231,19 @@ object HaDiscovery {
         return """{"name":"Camera Streaming","unique_id":"${deviceId}_stream_enable","device":${device(deviceId, name)},"state_topic":"${streamEnableStateTopic(deviceId)}","command_topic":"${streamEnableCommandTopic(deviceId)}","payload_on":"ON","payload_off":"OFF","state_on":"ON","state_off":"OFF","icon":"mdi:video"}"""
     }
 
+    // ── Camera Privacy Mode switch ───────────────────────────────────────────
+
+    fun cameraPrivacyModeDiscoveryTopic(deviceId: String) =
+        "homeassistant/switch/${deviceId}_camera_privacy/config"
+
+    fun cameraPrivacyModeStateTopic(deviceId: String) = "portal/$deviceId/camera_privacy/state"
+    fun cameraPrivacyModeCommandTopic(deviceId: String) = "portal/$deviceId/camera_privacy/set"
+
+    fun cameraPrivacyModeConfigPayload(deviceId: String, deviceName: String): String {
+        val name = deviceName.escape()
+        return """{"name":"Camera Privacy Mode","unique_id":"${deviceId}_camera_privacy","device":${device(deviceId, name)},"state_topic":"${cameraPrivacyModeStateTopic(deviceId)}","command_topic":"${cameraPrivacyModeCommandTopic(deviceId)}","payload_on":"ON","payload_off":"OFF","state_on":"ON","state_off":"OFF","icon":"mdi:eye-off"}"""
+    }
+
     // ── Motion binary sensor ──────────────────────────────────────────────────
 
     fun motionDiscoveryTopic(deviceId: String) =
@@ -350,6 +363,7 @@ object HaDiscovery {
         motionSensitivityCommandTopic(deviceId),
         motionEnableCommandTopic(deviceId),
         streamEnableCommandTopic(deviceId),
+        cameraPrivacyModeCommandTopic(deviceId),
         soundCommandTopic(deviceId),
         presenceEnableCommandTopic(deviceId),
         screenTimeoutCommandTopic(deviceId),
