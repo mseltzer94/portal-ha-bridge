@@ -303,7 +303,28 @@ class DashboardActivity : AppCompatActivity() {
         stopRtspStream()
         playerView.visibility = android.view.View.VISIBLE
 
-        val newPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(
+                /* minBufferMs = */ 500,
+                /* maxBufferMs = */ 1000,
+                /* bufferForPlaybackMs = */ 200,
+                /* bufferForPlaybackAfterRebufferMs = */ 200
+            )
+            .setPrioritizeTimeOverSizeThresholds(true)
+            .build()
+
+        val newPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .build()
+
+        // Disable audio track decoding entirely to save network & CPU bandwidth
+        val trackSelectionParameters = newPlayer.trackSelectionParameters
+            .buildUpon()
+            .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
+            .build()
+        newPlayer.trackSelectionParameters = trackSelectionParameters
+        newPlayer.volume = 0f
+
         val mediaItem = androidx.media3.common.MediaItem.fromUri(url)
         // Force TCP transport to improve network stability and avoid UDP dropouts
         val mediaSource = androidx.media3.exoplayer.rtsp.RtspMediaSource.Factory()
