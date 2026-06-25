@@ -9,6 +9,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import android.widget.Button
+import android.widget.ImageButton
 
 class DashboardActivity : AppCompatActivity() {
 
@@ -18,6 +19,8 @@ class DashboardActivity : AppCompatActivity() {
     private var dismissRetries = 0
     private var player: androidx.media3.exoplayer.ExoPlayer? = null
     private lateinit var playerView: androidx.media3.ui.PlayerView
+    private lateinit var overlayWebView: WebView
+    private lateinit var btnCloseOverlay: ImageButton
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -123,6 +126,38 @@ class DashboardActivity : AppCompatActivity() {
         loadDashboard()
 
         playerView = findViewById(R.id.player_view)
+
+        overlayWebView = findViewById(R.id.overlay_web_view)
+        btnCloseOverlay = findViewById(R.id.btn_close_overlay)
+
+        overlayWebView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            setSupportZoom(false)
+            loadWithOverviewMode = true
+            useWideViewPort = true
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mediaPlaybackRequiresUserGesture = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+        }
+
+        overlayWebView.webChromeClient = object : WebChromeClient() {
+            override fun onPermissionRequest(request: PermissionRequest) {
+                request.grant(request.resources)
+            }
+        }
+
+        overlayWebView.webViewClient = object : WebViewClient() {
+            override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                handler.proceed()
+            }
+        }
+
+        btnCloseOverlay.setOnClickListener {
+            hideUrlOverlay()
+        }
+
         handleIntent(intent)
 
         // First run (nothing configured yet): drop straight into Settings rather
@@ -154,7 +189,11 @@ class DashboardActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             enableImmersive()
-            webView.requestFocus()
+            if (overlayWebView.visibility == android.view.View.VISIBLE) {
+                overlayWebView.requestFocus()
+            } else {
+                webView.requestFocus()
+            }
         }
     }
 
@@ -184,7 +223,11 @@ class DashboardActivity : AppCompatActivity() {
 
         dismissRetries = 0
         dismissKeyguard()
-        webView.requestFocus()
+        if (overlayWebView.visibility == android.view.View.VISIBLE) {
+            overlayWebView.requestFocus()
+        } else {
+            webView.requestFocus()
+        }
 
         // Re-acquire the camera if another app (e.g. the Portal launcher) took
         // it while we were in the background.
@@ -200,6 +243,12 @@ class DashboardActivity : AppCompatActivity() {
         val rtspUrl = prefs.displayRtspUrl
         if (rtspUrl.isNotEmpty() && rtspUrl.uppercase() != "OFF") {
             playRtspStream(rtspUrl)
+        }
+
+        // Resume URL overlay if active
+        val displayUrl = prefs.displayUrl
+        if (displayUrl.isNotEmpty() && displayUrl.uppercase() != "OFF") {
+            showUrlOverlay(displayUrl)
         }
     }
 
@@ -272,6 +321,8 @@ class DashboardActivity : AppCompatActivity() {
     override fun onBackPressed() {
         when {
             drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
+            overlayWebView.visibility == android.view.View.VISIBLE && overlayWebView.canGoBack() -> overlayWebView.goBack()
+            overlayWebView.visibility == android.view.View.VISIBLE -> hideUrlOverlay()
             webView.canGoBack() -> webView.goBack()
             else -> super.onBackPressed()
         }
@@ -289,14 +340,43 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        val url = intent?.getStringExtra("play_rtsp_url")
-        if (url != null) {
-            if (url.isNotEmpty() && url.uppercase() != "OFF") {
-                playRtspStream(url)
+        val rtspUrl = intent?.getStringExtra("play_rtsp_url")
+        if (rtspUrl != null) {
+            if (rtspUrl.isNotEmpty() && rtspUrl.uppercase() != "OFF") {
+                playRtspStream(rtspUrl)
             } else {
                 stopRtspStream()
             }
         }
+        val displayUrl = intent?.getStringExtra("display_url")
+        if (displayUrl != null) {
+            if (displayUrl.isNotEmpty() && displayUrl.uppercase() != "OFF") {
+                showUrlOverlay(displayUrl)
+            } else {
+                hideUrlOverlay()
+            }
+        }
+    }
+
+    private fun showUrlOverlay(url: String) {
+        overlayWebView.visibility = android.view.View.VISIBLE
+        btnCloseOverlay.visibility = android.view.View.VISIBLE
+        overlayWebView.requestFocus()
+
+        val current = overlayWebView.url ?: ""
+        if (!current.startsWith(url.trimEnd('/'))) {
+            overlayWebView.loadUrl(url)
+        }
+    }
+
+    private fun hideUrlOverlay() {
+        overlayWebView.visibility = android.view.View.GONE
+        btnCloseOverlay.visibility = android.view.View.GONE
+        overlayWebView.loadUrl("about:blank")
+        webView.requestFocus()
+
+        // Report the state update back to HA via BridgeService
+        BridgeService.setDisplayUrl(this, "OFF")
     }
 
     private fun playRtspStream(url: String) {

@@ -354,6 +354,19 @@ object HaDiscovery {
         return """{"name":"Display RTSP Stream","unique_id":"${deviceId}_display_rtsp","device":${device(deviceId, name)},"state_topic":"${displayRtspStateTopic(deviceId)}","command_topic":"${displayRtspCommandTopic(deviceId)}","icon":"mdi:video-input-hdmi"}"""
     }
 
+    // ── Native WebView URL Display ────────────────────────────────────────────
+
+    fun displayUrlDiscoveryTopic(deviceId: String) =
+        "homeassistant/text/${deviceId}_display_url/config"
+
+    fun displayUrlStateTopic(deviceId: String) = "portal/$deviceId/display_url/state"
+    fun displayUrlCommandTopic(deviceId: String) = "portal/$deviceId/display_url/set"
+
+    fun displayUrlConfigPayload(deviceId: String, deviceName: String): String {
+        val name = deviceName.escape()
+        return """{"name":"Display URL","unique_id":"${deviceId}_display_url","device":${device(deviceId, name)},"state_topic":"${displayUrlStateTopic(deviceId)}","command_topic":"${displayUrlCommandTopic(deviceId)}","icon":"mdi:web"}"""
+    }
+
     // ── Stale entity cleanup ──────────────────────────────────────────────────
 
     fun staleTopics(deviceId: String) = listOf(
@@ -382,7 +395,8 @@ object HaDiscovery {
         screenTimeoutCommandTopic(deviceId),
         screenTimeoutMinsCommandTopic(deviceId),
         tempOffsetCommandTopic(deviceId),
-        displayRtspCommandTopic(deviceId)
+        displayRtspCommandTopic(deviceId),
+        displayUrlCommandTopic(deviceId)
     )
 
     // ── Shared helpers ────────────────────────────────────────────────────────

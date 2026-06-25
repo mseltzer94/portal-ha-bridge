@@ -25,6 +25,24 @@
             app:use_controller="false"
             app:resize_mode="fit"
             android:background="#000000" />
+
+        <WebView
+            android:id="@+id/overlay_web_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:background="#000000" />
+
+        <ImageButton
+            android:id="@+id/btn_close_overlay"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|end"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_circle_button"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="Close Overlay"
+            android:visibility="gone" />
     </FrameLayout>
 
     <!-- Left drawer (swipe from left edge to open) -->
