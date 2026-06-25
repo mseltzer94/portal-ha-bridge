@@ -308,6 +308,7 @@ class DashboardActivity : AppCompatActivity() {
         // Force TCP transport to improve network stability and avoid UDP dropouts
         val mediaSource = androidx.media3.exoplayer.rtsp.RtspMediaSource.Factory()
             .setForceUseRtpTcp(true)
+            .setDebugLoggingEnabled(true)
             .createMediaSource(mediaItem)
 
         newPlayer.setMediaSource(mediaSource)
