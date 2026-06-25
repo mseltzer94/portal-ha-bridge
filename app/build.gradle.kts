@@ -61,6 +61,11 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.paho.mqtt)
 
+    // Native RTSP media player
+    implementation(libs.androidx.media3.exoplayer)
+    implementation(libs.androidx.media3.exoplayer.rtsp)
+    implementation(libs.androidx.media3.ui)
+
     // RTSP server (headless RtspServerStream). Kotlin-2.0-era versions so they
     // build cleanly under our Kotlin 2.0.20 — no metadata hacks.
     implementation("com.github.pedroSG94:RTSP-Server:1.3.0")

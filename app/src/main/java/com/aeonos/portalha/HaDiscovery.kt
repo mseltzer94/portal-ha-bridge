@@ -341,6 +341,19 @@ object HaDiscovery {
         return """{"name":"IP Address","unique_id":"${deviceId}_ip","device":${device(deviceId, name)},"state_topic":"${ipStateTopic(deviceId)}","icon":"mdi:ip-network","entity_category":"diagnostic"}"""
     }
 
+    // ── Native RTSP Display Stream ────────────────────────────────────────────
+
+    fun displayRtspDiscoveryTopic(deviceId: String) =
+        "homeassistant/text/${deviceId}_display_rtsp/config"
+
+    fun displayRtspStateTopic(deviceId: String) = "portal/$deviceId/display_rtsp/state"
+    fun displayRtspCommandTopic(deviceId: String) = "portal/$deviceId/display_rtsp/set"
+
+    fun displayRtspConfigPayload(deviceId: String, deviceName: String): String {
+        val name = deviceName.escape()
+        return """{"name":"Display RTSP Stream","unique_id":"${deviceId}_display_rtsp","device":${device(deviceId, name)},"state_topic":"${displayRtspStateTopic(deviceId)}","command_topic":"${displayRtspCommandTopic(deviceId)}","icon":"mdi:video-input-hdmi"}"""
+    }
+
     // ── Stale entity cleanup ──────────────────────────────────────────────────
 
     fun staleTopics(deviceId: String) = listOf(
@@ -368,7 +381,8 @@ object HaDiscovery {
         presenceEnableCommandTopic(deviceId),
         screenTimeoutCommandTopic(deviceId),
         screenTimeoutMinsCommandTopic(deviceId),
-        tempOffsetCommandTopic(deviceId)
+        tempOffsetCommandTopic(deviceId),
+        displayRtspCommandTopic(deviceId)
     )
 
     // ── Shared helpers ────────────────────────────────────────────────────────

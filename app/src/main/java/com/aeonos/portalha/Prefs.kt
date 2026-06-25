@@ -140,5 +140,9 @@ class Prefs(private val context: Context) {
         get() = sp.getBoolean("camera_privacy_mode", false)
         set(v) = sp.edit().putBoolean("camera_privacy_mode", v).apply()
 
+    var displayRtspUrl: String
+        get() = sp.getString("display_rtsp_url", "") ?: ""
+        set(v) = sp.edit().putString("display_rtsp_url", v).apply()
+
     val brokerUri: String get() = "tcp://$brokerHost:$brokerPort"
 }

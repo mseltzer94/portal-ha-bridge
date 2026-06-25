@@ -489,7 +489,8 @@ class BridgeService : Service() {
             HaDiscovery.presenceEnableCommandTopic(p.deviceId),
             HaDiscovery.screenTimeoutCommandTopic(p.deviceId),
             HaDiscovery.screenTimeoutMinsCommandTopic(p.deviceId),
-            if (sensorBridge?.hasTemperature == true) HaDiscovery.tempOffsetCommandTopic(p.deviceId) else null
+            if (sensorBridge?.hasTemperature == true) HaDiscovery.tempOffsetCommandTopic(p.deviceId) else null,
+            HaDiscovery.displayRtspCommandTopic(p.deviceId)
         ).forEach { client.subscribe(it, 1) }
 
         // Clear stale retained entities from old builds
@@ -508,6 +509,7 @@ class BridgeService : Service() {
         publishBrightnessState(p)
         publishDisplayStates(p)
         publishRaw(HaDiscovery.ipStateTopic(p.deviceId), localIp() ?: "unknown", 1, retained = true)
+        publishRaw(HaDiscovery.displayRtspStateTopic(p.deviceId), p.displayRtspUrl, 1, retained = true)
         if (sensorBridge?.hasTemperature == true)
             publishRaw(HaDiscovery.tempOffsetStateTopic(p.deviceId), "%.1f".format(p.tempOffset), 1, retained = true)
         if (p.cameraServiceEnabled) {
@@ -598,6 +600,7 @@ class BridgeService : Service() {
         pub(HaDiscovery.presenceEnableDiscoveryTopic(p.deviceId), HaDiscovery.presenceEnableConfigPayload(p.deviceId, p.deviceName))
         pub(HaDiscovery.screenTimeoutDiscoveryTopic(p.deviceId), HaDiscovery.screenTimeoutConfigPayload(p.deviceId, p.deviceName))
         pub(HaDiscovery.screenTimeoutMinsDiscoveryTopic(p.deviceId), HaDiscovery.screenTimeoutMinsConfigPayload(p.deviceId, p.deviceName))
+        pub(HaDiscovery.displayRtspDiscoveryTopic(p.deviceId), HaDiscovery.displayRtspConfigPayload(p.deviceId, p.deviceName))
         if (p.presenceEnabled) {
             pub(HaDiscovery.presenceDiscoveryTopic(p.deviceId), HaDiscovery.presenceConfigPayload(p.deviceId, p.deviceName))
         } else {
@@ -652,6 +655,7 @@ class BridgeService : Service() {
             HaDiscovery.screenTimeoutCommandTopic(p.deviceId)     -> handleScreenTimeoutCommand(payload, p)
             HaDiscovery.screenTimeoutMinsCommandTopic(p.deviceId) -> handleScreenTimeoutMinsCommand(payload, p)
             HaDiscovery.tempOffsetCommandTopic(p.deviceId)        -> handleTempOffsetCommand(payload, p)
+            HaDiscovery.displayRtspCommandTopic(p.deviceId)       -> handleDisplayRtspCommand(payload, p)
         }
     }
 
@@ -912,6 +916,31 @@ class BridgeService : Service() {
         p.tempOffset = payload.toFloatOrNull() ?: return
         sensorBridge?.republishTemperature()   // reflect immediately in HA
         publishRaw(HaDiscovery.tempOffsetStateTopic(p.deviceId), "%.1f".format(p.tempOffset), 1, retained = true)
+    }
+
+    private fun handleDisplayRtspCommand(payload: String, p: Prefs) {
+        val url = payload.trim()
+        p.displayRtspUrl = url
+        publishRaw(HaDiscovery.displayRtspStateTopic(p.deviceId), url, 1, retained = true)
+
+        if ((url.isEmpty() || url.uppercase() == "OFF") && !screenOn) {
+            return
+        }
+
+        if (url.isNotEmpty() && url.uppercase() != "OFF") {
+            ScreenControl.wake(this)
+        }
+
+        mainHandler.post {
+            runCatching {
+                val intent = Intent(this, DashboardActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra("play_rtsp_url", url)
+                }
+                startActivity(intent)
+                Log.i(TAG, "handleDisplayRtspCommand: started DashboardActivity with url extra")
+            }.onFailure { Log.w(TAG, "failed to start DashboardActivity for RTSP: ${it.message}") }
+        }
     }
 
     private fun hasReadLogs() =

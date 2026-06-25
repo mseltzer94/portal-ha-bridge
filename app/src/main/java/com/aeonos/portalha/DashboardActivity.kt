@@ -16,6 +16,8 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var drawer: DrawerLayout
     private lateinit var prefs: Prefs
     private var dismissRetries = 0
+    private var player: androidx.media3.exoplayer.ExoPlayer? = null
+    private lateinit var playerView: androidx.media3.ui.PlayerView
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -120,6 +122,9 @@ class DashboardActivity : AppCompatActivity() {
 
         loadDashboard()
 
+        playerView = findViewById(R.id.player_view)
+        handleIntent(intent)
+
         // First run (nothing configured yet): drop straight into Settings rather
         // than showing the empty dashboard placeholder. Only on a genuine fresh
         // create — savedInstanceState guards against config-change recreation,
@@ -169,6 +174,8 @@ class DashboardActivity : AppCompatActivity() {
         }
         @Suppress("DEPRECATION")
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD)
+
+        handleIntent(intent)
     }
 
     override fun onResume() {
@@ -187,6 +194,12 @@ class DashboardActivity : AppCompatActivity() {
         val current = webView.url ?: ""
         if (url.isNotEmpty() && !current.startsWith(normalise(url).trimEnd('/'))) {
             loadDashboard()
+        }
+
+        // Resume video playback if an RTSP URL was active
+        val rtspUrl = prefs.displayRtspUrl
+        if (rtspUrl.isNotEmpty() && rtspUrl.uppercase() != "OFF") {
+            playRtspStream(rtspUrl)
         }
     }
 
@@ -262,5 +275,63 @@ class DashboardActivity : AppCompatActivity() {
             webView.canGoBack() -> webView.goBack()
             else -> super.onBackPressed()
         }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Release player and network socket when activity goes out of view to save resources
+        stopRtspStream()
+    }
+
+    override fun onDestroy() {
+        stopRtspStream()
+        super.onDestroy()
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val url = intent?.getStringExtra("play_rtsp_url")
+        if (url != null) {
+            if (url.isNotEmpty() && url.uppercase() != "OFF") {
+                playRtspStream(url)
+            } else {
+                stopRtspStream()
+            }
+        }
+    }
+
+    private fun playRtspStream(url: String) {
+        stopRtspStream()
+        playerView.visibility = android.view.View.VISIBLE
+
+        val newPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(this).build()
+        val mediaItem = androidx.media3.common.MediaItem.fromUri(url)
+        // Force TCP transport to improve network stability and avoid UDP dropouts
+        val mediaSource = androidx.media3.exoplayer.rtsp.RtspMediaSource.Factory()
+            .setForceUseRtpTcp(true)
+            .createMediaSource(mediaItem)
+
+        newPlayer.setMediaSource(mediaSource)
+        newPlayer.prepare()
+        newPlayer.playWhenReady = true
+
+        newPlayer.addListener(object : androidx.media3.common.Player.Listener {
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                android.util.Log.e("PortalHA", "ExoPlayer playback error: ${error.message}")
+                stopRtspStream()
+            }
+        })
+
+        player = newPlayer
+        playerView.player = newPlayer
+    }
+
+    private fun stopRtspStream() {
+        player?.let {
+            it.stop()
+            it.release()
+        }
+        player = null
+        playerView.player = null
+        playerView.visibility = android.view.View.GONE
     }
 }
