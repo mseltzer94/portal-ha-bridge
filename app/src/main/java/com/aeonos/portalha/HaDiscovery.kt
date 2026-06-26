@@ -364,7 +364,21 @@ object HaDiscovery {
 
     fun displayUrlConfigPayload(deviceId: String, deviceName: String): String {
         val name = deviceName.escape()
-        return """{"name":"Display URL","unique_id":"${deviceId}_display_url","device":${device(deviceId, name)},"state_topic":"${displayUrlStateTopic(deviceId)}","command_topic":"${displayUrlCommandTopic(deviceId)}","icon":"mdi:web"}"""
+        return """{"name":"Display URL","unique_id":"${deviceId}_display_url","device":${device(deviceId, name)},"state_topic":"${displayUrlStateTopic(deviceId)}","command_topic":"${displayUrlCommandTopic(deviceId)}","icon":"mdi:web","max":255}"""
+    }
+
+    // ── Native Alert / Overlay Display ────────────────────────────────────────
+
+    fun displayAlertDiscoveryTopic(deviceId: String) =
+        "homeassistant/text/${deviceId}_display_alert/config"
+
+    fun displayAlertStateTopic(deviceId: String) = "portal/$deviceId/display_alert/state"
+    fun displayAlertCommandTopic(deviceId: String) = "portal/$deviceId/display_alert/set"
+    fun displayAlertActionTopic(deviceId: String) = "portal/$deviceId/display_alert/action"
+
+    fun displayAlertConfigPayload(deviceId: String, deviceName: String): String {
+        val name = deviceName.escape()
+        return """{"name":"Display Alert","unique_id":"${deviceId}_display_alert","device":${device(deviceId, name)},"state_topic":"${displayAlertStateTopic(deviceId)}","command_topic":"${displayAlertCommandTopic(deviceId)}","icon":"mdi:alert-circle-outline","max":255}"""
     }
 
     // ── Stale entity cleanup ──────────────────────────────────────────────────
@@ -396,7 +410,8 @@ object HaDiscovery {
         screenTimeoutMinsCommandTopic(deviceId),
         tempOffsetCommandTopic(deviceId),
         displayRtspCommandTopic(deviceId),
-        displayUrlCommandTopic(deviceId)
+        displayUrlCommandTopic(deviceId),
+        displayAlertCommandTopic(deviceId)
     )
 
     // ── Shared helpers ────────────────────────────────────────────────────────

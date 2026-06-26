@@ -10,6 +10,10 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ProgressBar
+import android.widget.TextView
+import org.json.JSONObject
+import android.os.CountDownTimer
 
 class DashboardActivity : AppCompatActivity() {
 
@@ -21,6 +25,20 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var playerView: androidx.media3.ui.PlayerView
     private lateinit var overlayWebView: WebView
     private lateinit var btnCloseOverlay: ImageButton
+    private lateinit var btnReloadOverlay: ImageButton
+
+    // Alert Overlay views
+    private lateinit var alertOverlay: android.view.View
+    private lateinit var tvAlertIcon: TextView
+    private lateinit var tvAlertTitle: TextView
+    private lateinit var tvAlertMessage: TextView
+    private lateinit var pbAlertTimer: ProgressBar
+    private lateinit var tvAlertTimer: TextView
+    private lateinit var layoutAlertButtons: android.view.View
+    private lateinit var btnAlertAction1: Button
+    private lateinit var btnAlertAction2: Button
+    private var alertTimer: CountDownTimer? = null
+    private var activeAlertId: String? = null
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -97,6 +115,17 @@ class DashboardActivity : AppCompatActivity() {
             }
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
+                if (url.startsWith("portal://", ignoreCase = true) || url.startsWith("portal-url://", ignoreCase = true)) {
+                    val target = if (url.startsWith("portal://", ignoreCase = true)) {
+                        url.substringAfter("portal://")
+                    } else {
+                        url.substringAfter("portal-url://")
+                    }
+                    if (target.isNotEmpty()) {
+                        showUrlOverlay(target)
+                    }
+                    return true
+                }
                 if (url.startsWith("http://") || url.startsWith("https://")) return false
                 // intent:// and other app schemes — WebView drops these silently,
                 // so hand them to Android (lets HA cards launch Portal apps).
@@ -129,6 +158,7 @@ class DashboardActivity : AppCompatActivity() {
 
         overlayWebView = findViewById(R.id.overlay_web_view)
         btnCloseOverlay = findViewById(R.id.btn_close_overlay)
+        btnReloadOverlay = findViewById(R.id.btn_reload_overlay)
 
         overlayWebView.settings.apply {
             javaScriptEnabled = true
@@ -156,6 +186,26 @@ class DashboardActivity : AppCompatActivity() {
 
         btnCloseOverlay.setOnClickListener {
             hideUrlOverlay()
+        }
+
+        btnReloadOverlay.setOnClickListener {
+            overlayWebView.reload()
+        }
+
+        alertOverlay = findViewById(R.id.layout_alert_overlay)
+        tvAlertIcon = findViewById(R.id.tv_alert_icon)
+        tvAlertTitle = findViewById(R.id.tv_alert_title)
+        tvAlertMessage = findViewById(R.id.tv_alert_message)
+        pbAlertTimer = findViewById(R.id.pb_alert_timer)
+        tvAlertTimer = findViewById(R.id.tv_alert_timer)
+        layoutAlertButtons = findViewById(R.id.layout_alert_buttons)
+        btnAlertAction1 = findViewById(R.id.btn_alert_action1)
+        btnAlertAction2 = findViewById(R.id.btn_alert_action2)
+
+        alertOverlay.setOnClickListener {
+            if (layoutAlertButtons.visibility != android.view.View.VISIBLE) {
+                hideAlertOverlay()
+            }
         }
 
         handleIntent(intent)
@@ -189,10 +239,10 @@ class DashboardActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             enableImmersive()
-            if (overlayWebView.visibility == android.view.View.VISIBLE) {
-                overlayWebView.requestFocus()
-            } else {
-                webView.requestFocus()
+            when {
+                alertOverlay.visibility == android.view.View.VISIBLE -> alertOverlay.requestFocus()
+                overlayWebView.visibility == android.view.View.VISIBLE -> overlayWebView.requestFocus()
+                else -> webView.requestFocus()
             }
         }
     }
@@ -223,10 +273,10 @@ class DashboardActivity : AppCompatActivity() {
 
         dismissRetries = 0
         dismissKeyguard()
-        if (overlayWebView.visibility == android.view.View.VISIBLE) {
-            overlayWebView.requestFocus()
-        } else {
-            webView.requestFocus()
+        when {
+            alertOverlay.visibility == android.view.View.VISIBLE -> alertOverlay.requestFocus()
+            overlayWebView.visibility == android.view.View.VISIBLE -> overlayWebView.requestFocus()
+            else -> webView.requestFocus()
         }
 
         // Re-acquire the camera if another app (e.g. the Portal launcher) took
@@ -249,6 +299,12 @@ class DashboardActivity : AppCompatActivity() {
         val displayUrl = prefs.displayUrl
         if (displayUrl.isNotEmpty() && displayUrl.uppercase() != "OFF") {
             showUrlOverlay(displayUrl)
+        }
+
+        // Resume Alert overlay if active
+        val displayAlert = prefs.displayAlertPayload
+        if (displayAlert.isNotEmpty() && displayAlert.uppercase() != "OFF") {
+            showAlertOverlay(displayAlert)
         }
     }
 
@@ -321,6 +377,7 @@ class DashboardActivity : AppCompatActivity() {
     override fun onBackPressed() {
         when {
             drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
+            alertOverlay.visibility == android.view.View.VISIBLE -> hideAlertOverlay()
             overlayWebView.visibility == android.view.View.VISIBLE && overlayWebView.canGoBack() -> overlayWebView.goBack()
             overlayWebView.visibility == android.view.View.VISIBLE -> hideUrlOverlay()
             webView.canGoBack() -> webView.goBack()
@@ -356,22 +413,172 @@ class DashboardActivity : AppCompatActivity() {
                 hideUrlOverlay()
             }
         }
+        val displayAlert = intent?.getStringExtra("display_alert")
+        if (displayAlert != null) {
+            if (displayAlert.isNotEmpty() && displayAlert.uppercase() != "OFF") {
+                showAlertOverlay(displayAlert)
+            } else {
+                hideAlertOverlay()
+            }
+        }
+    }
+
+    private fun showAlertOverlay(payload: String) {
+        alertTimer?.cancel()
+        alertTimer = null
+
+        try {
+            val json = JSONObject(payload)
+            activeAlertId = json.optString("id", "alert")
+
+            tvAlertTitle.text = json.optString("title", "Alert")
+            tvAlertMessage.text = json.optString("message", "")
+
+            val icon = json.optString("icon", "🔔")
+            tvAlertIcon.text = icon
+
+            val bgColorStr = json.optString("bg_color", "#121212")
+            runCatching {
+                alertOverlay.setBackgroundColor(android.graphics.Color.parseColor(bgColorStr))
+            }.onFailure {
+                alertOverlay.setBackgroundColor(android.graphics.Color.parseColor("#121212"))
+            }
+
+            val accentColorStr = json.optString("accent_color", "#4CAF50")
+            val accentColor = try {
+                android.graphics.Color.parseColor(accentColorStr)
+            } catch (e: Exception) {
+                android.graphics.Color.parseColor("#4CAF50")
+            }
+
+            val buttonsArray = json.optJSONArray("buttons")
+            if (buttonsArray != null && buttonsArray.length() > 0) {
+                layoutAlertButtons.visibility = android.view.View.VISIBLE
+                
+                val btn1 = buttonsArray.optJSONObject(0)
+                if (btn1 != null) {
+                    btnAlertAction1.visibility = android.view.View.VISIBLE
+                    btnAlertAction1.text = btn1.optString("label", "Action 1")
+                    val btn1Action = btn1.optString("action", "minimize")
+                    btnAlertAction1.setOnClickListener {
+                        if (btn1Action == "minimize") {
+                            hideAlertOverlay()
+                        } else {
+                            BridgeService.publishAlertAction(this, activeAlertId ?: "alert", btn1Action)
+                            hideAlertOverlay()
+                        }
+                    }
+                    btnAlertAction1.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                } else {
+                    btnAlertAction1.visibility = android.view.View.GONE
+                }
+
+                val btn2 = buttonsArray.optJSONObject(1)
+                if (btn2 != null) {
+                    btnAlertAction2.visibility = android.view.View.VISIBLE
+                    btnAlertAction2.text = btn2.optString("label", "Action 2")
+                    val btn2Action = btn2.optString("action", "cancel")
+                    btnAlertAction2.setOnClickListener {
+                        if (btn2Action == "minimize") {
+                            hideAlertOverlay()
+                        } else {
+                            BridgeService.publishAlertAction(this, activeAlertId ?: "alert", btn2Action)
+                            hideAlertOverlay()
+                        }
+                    }
+                    btnAlertAction2.backgroundTintList = android.content.res.ColorStateList.valueOf(accentColor)
+                } else {
+                    btnAlertAction2.visibility = android.view.View.GONE
+                }
+            } else {
+                layoutAlertButtons.visibility = android.view.View.GONE
+            }
+
+            val type = json.optString("type", "alert")
+            val durationSeconds = json.optInt("duration_seconds", 0)
+
+            if (durationSeconds > 0) {
+                val totalMs = durationSeconds * 1000L
+                if (type == "timer") {
+                    pbAlertTimer.visibility = android.view.View.VISIBLE
+                    tvAlertTimer.visibility = android.view.View.VISIBLE
+                    pbAlertTimer.progressTintList = android.content.res.ColorStateList.valueOf(accentColor)
+
+                    alertTimer = object : CountDownTimer(totalMs, 1000L) {
+                        override fun onTick(millisUntilFinished: Long) {
+                            val secs = millisUntilFinished / 1000
+                            val minPart = secs / 60
+                            val secPart = secs % 60
+                            tvAlertTimer.text = "%02d:%02d".format(minPart, secPart)
+                            
+                            val progress = ((millisUntilFinished.toFloat() / totalMs.toFloat()) * 100).toInt()
+                            pbAlertTimer.progress = progress
+                        }
+
+                        override fun onFinish() {
+                            hideAlertOverlay()
+                        }
+                    }.start()
+                } else {
+                    pbAlertTimer.visibility = android.view.View.GONE
+                    tvAlertTimer.visibility = android.view.View.GONE
+                    
+                    alertTimer = object : CountDownTimer(totalMs, totalMs) {
+                        override fun onTick(millisUntilFinished: Long) {}
+                        override fun onFinish() {
+                            hideAlertOverlay()
+                        }
+                    }.start()
+                }
+            } else {
+                pbAlertTimer.visibility = android.view.View.GONE
+                tvAlertTimer.visibility = android.view.View.GONE
+            }
+
+            alertOverlay.visibility = android.view.View.VISIBLE
+            alertOverlay.requestFocus()
+        } catch (e: Exception) {
+            android.util.Log.e("PortalHA", "Failed to parse alert payload: ${e.message}")
+            hideAlertOverlay()
+        }
+    }
+
+    private fun hideAlertOverlay() {
+        alertTimer?.cancel()
+        alertTimer = null
+        activeAlertId = null
+
+        alertOverlay.visibility = android.view.View.GONE
+        pbAlertTimer.visibility = android.view.View.GONE
+        tvAlertTimer.visibility = android.view.View.GONE
+        
+        when {
+            overlayWebView.visibility == android.view.View.VISIBLE -> overlayWebView.requestFocus()
+            else -> webView.requestFocus()
+        }
+
+        BridgeService.setDisplayAlert(this, "OFF")
     }
 
     private fun showUrlOverlay(url: String) {
         overlayWebView.visibility = android.view.View.VISIBLE
         btnCloseOverlay.visibility = android.view.View.VISIBLE
+        btnReloadOverlay.visibility = android.view.View.VISIBLE
         overlayWebView.requestFocus()
 
         val current = overlayWebView.url ?: ""
         if (!current.startsWith(url.trimEnd('/'))) {
             overlayWebView.loadUrl(url)
         }
+
+        // Report the state update back to HA via BridgeService
+        BridgeService.setDisplayUrl(this, url)
     }
 
     private fun hideUrlOverlay() {
         overlayWebView.visibility = android.view.View.GONE
         btnCloseOverlay.visibility = android.view.View.GONE
+        btnReloadOverlay.visibility = android.view.View.GONE
         overlayWebView.loadUrl("about:blank")
         webView.requestFocus()
 

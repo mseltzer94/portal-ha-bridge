@@ -148,5 +148,9 @@ class Prefs(private val context: Context) {
         get() = sp.getString("display_url", "") ?: ""
         set(v) = sp.edit().putString("display_url", v).apply()
 
+    var displayAlertPayload: String
+        get() = sp.getString("display_alert_payload", "") ?: ""
+        set(v) = sp.edit().putString("display_alert_payload", v).apply()
+
     val brokerUri: String get() = "tcp://$brokerHost:$brokerPort"
 }

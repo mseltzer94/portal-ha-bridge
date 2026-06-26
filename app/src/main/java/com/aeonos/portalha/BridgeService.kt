@@ -45,6 +45,11 @@ class BridgeService : Service() {
         private const val EXTRA_PRIVACY_MODE = "privacy_mode"
         private const val ACTION_SET_DISPLAY_URL = "com.aeonos.portalha.SET_DISPLAY_URL"
         private const val EXTRA_DISPLAY_URL = "display_url"
+        private const val ACTION_SET_DISPLAY_ALERT = "com.aeonos.portalha.SET_DISPLAY_ALERT"
+        private const val EXTRA_DISPLAY_ALERT = "display_alert"
+        private const val ACTION_PUBLISH_ALERT_ACTION = "com.aeonos.portalha.PUBLISH_ALERT_ACTION"
+        private const val EXTRA_ALERT_ID = "alert_id"
+        private const val EXTRA_ALERT_ACTION = "alert_action"
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, BridgeService::class.java))
@@ -82,6 +87,16 @@ class BridgeService : Service() {
         fun setDisplayUrl(context: Context, url: String) =
             context.startForegroundService(Intent(context, BridgeService::class.java)
                 .setAction(ACTION_SET_DISPLAY_URL).putExtra(EXTRA_DISPLAY_URL, url))
+
+        fun setDisplayAlert(context: Context, payload: String) =
+            context.startForegroundService(Intent(context, BridgeService::class.java)
+                .setAction(ACTION_SET_DISPLAY_ALERT).putExtra(EXTRA_DISPLAY_ALERT, payload))
+
+        fun publishAlertAction(context: Context, alertId: String, action: String) =
+            context.startForegroundService(Intent(context, BridgeService::class.java)
+                .setAction(ACTION_PUBLISH_ALERT_ACTION)
+                .putExtra(EXTRA_ALERT_ID, alertId)
+                .putExtra(EXTRA_ALERT_ACTION, action))
 
         fun localIp(): String? = try {
             NetworkInterface.getNetworkInterfaces()
@@ -311,6 +326,27 @@ class BridgeService : Service() {
                 }.onFailure { Log.w(TAG, "in-app display URL setting failed: ${it.message}") }
             }
         }
+        if (intent?.action == ACTION_SET_DISPLAY_ALERT) {
+            val payload = intent.getStringExtra(EXTRA_DISPLAY_ALERT) ?: "OFF"
+            val p = prefs ?: Prefs(this).also { prefs = it }
+            commandExecutor.submit {
+                runCatching {
+                    p.displayAlertPayload = payload
+                    publishRaw(HaDiscovery.displayAlertStateTopic(p.deviceId), payload, 1, retained = true)
+                }
+            }
+        }
+        if (intent?.action == ACTION_PUBLISH_ALERT_ACTION) {
+            val alertId = intent.getStringExtra(EXTRA_ALERT_ID) ?: "alert"
+            val action = intent.getStringExtra(EXTRA_ALERT_ACTION) ?: "minimize"
+            val p = prefs ?: Prefs(this).also { prefs = it }
+            commandExecutor.submit {
+                runCatching {
+                    val payload = """{"id":"$alertId","action":"$action"}"""
+                    publishRaw(HaDiscovery.displayAlertActionTopic(p.deviceId), payload, 1, retained = false)
+                }
+            }
+        }
         return START_STICKY
     }
 
@@ -508,7 +544,8 @@ class BridgeService : Service() {
             HaDiscovery.screenTimeoutMinsCommandTopic(p.deviceId),
             if (sensorBridge?.hasTemperature == true) HaDiscovery.tempOffsetCommandTopic(p.deviceId) else null,
             HaDiscovery.displayRtspCommandTopic(p.deviceId),
-            HaDiscovery.displayUrlCommandTopic(p.deviceId)
+            HaDiscovery.displayUrlCommandTopic(p.deviceId),
+            HaDiscovery.displayAlertCommandTopic(p.deviceId)
         ).forEach { client.subscribe(it, 1) }
 
         // Clear stale retained entities from old builds
@@ -529,6 +566,7 @@ class BridgeService : Service() {
         publishRaw(HaDiscovery.ipStateTopic(p.deviceId), localIp() ?: "unknown", 1, retained = true)
         publishRaw(HaDiscovery.displayRtspStateTopic(p.deviceId), p.displayRtspUrl, 1, retained = true)
         publishRaw(HaDiscovery.displayUrlStateTopic(p.deviceId), p.displayUrl, 1, retained = true)
+        publishRaw(HaDiscovery.displayAlertStateTopic(p.deviceId), p.displayAlertPayload, 1, retained = true)
         if (sensorBridge?.hasTemperature == true)
             publishRaw(HaDiscovery.tempOffsetStateTopic(p.deviceId), "%.1f".format(p.tempOffset), 1, retained = true)
         if (p.cameraServiceEnabled) {
@@ -621,6 +659,7 @@ class BridgeService : Service() {
         pub(HaDiscovery.screenTimeoutMinsDiscoveryTopic(p.deviceId), HaDiscovery.screenTimeoutMinsConfigPayload(p.deviceId, p.deviceName))
         pub(HaDiscovery.displayRtspDiscoveryTopic(p.deviceId), HaDiscovery.displayRtspConfigPayload(p.deviceId, p.deviceName))
         pub(HaDiscovery.displayUrlDiscoveryTopic(p.deviceId), HaDiscovery.displayUrlConfigPayload(p.deviceId, p.deviceName))
+        pub(HaDiscovery.displayAlertDiscoveryTopic(p.deviceId), HaDiscovery.displayAlertConfigPayload(p.deviceId, p.deviceName))
         if (p.presenceEnabled) {
             pub(HaDiscovery.presenceDiscoveryTopic(p.deviceId), HaDiscovery.presenceConfigPayload(p.deviceId, p.deviceName))
         } else {
@@ -677,6 +716,7 @@ class BridgeService : Service() {
             HaDiscovery.tempOffsetCommandTopic(p.deviceId)        -> handleTempOffsetCommand(payload, p)
             HaDiscovery.displayRtspCommandTopic(p.deviceId)       -> handleDisplayRtspCommand(payload, p)
             HaDiscovery.displayUrlCommandTopic(p.deviceId)        -> handleDisplayUrlCommand(payload, p)
+            HaDiscovery.displayAlertCommandTopic(p.deviceId)      -> handleDisplayAlertCommand(payload, p)
         }
     }
 
@@ -986,6 +1026,31 @@ class BridgeService : Service() {
                 startActivity(intent)
                 Log.i(TAG, "handleDisplayUrlCommand: started DashboardActivity with url extra")
             }.onFailure { Log.w(TAG, "failed to start DashboardActivity for URL: ${it.message}") }
+        }
+    }
+
+    private fun handleDisplayAlertCommand(payload: String, p: Prefs) {
+        val alert = payload.trim()
+        p.displayAlertPayload = alert
+        publishRaw(HaDiscovery.displayAlertStateTopic(p.deviceId), alert, 1, retained = true)
+
+        if ((alert.isEmpty() || alert.uppercase() == "OFF") && !screenOn) {
+            return
+        }
+
+        if (alert.isNotEmpty() && alert.uppercase() != "OFF") {
+            ScreenControl.wake(this)
+        }
+
+        mainHandler.post {
+            runCatching {
+                val intent = Intent(this, DashboardActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                    putExtra("display_alert", alert)
+                }
+                startActivity(intent)
+                Log.i(TAG, "handleDisplayAlertCommand: started DashboardActivity with alert extra")
+            }.onFailure { Log.w(TAG, "failed to start DashboardActivity for alert: ${it.message}") }
         }
     }
 

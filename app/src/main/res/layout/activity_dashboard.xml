@@ -43,6 +43,109 @@
             android:src="@android:drawable/ic_menu_close_clear_cancel"
             android:contentDescription="Close Overlay"
             android:visibility="gone" />
+
+        <ImageButton
+            android:id="@+id/btn_reload_overlay"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="80dp"
+            android:background="@drawable/bg_circle_button"
+            android:src="@android:drawable/ic_menu_rotate"
+            android:contentDescription="Reload Overlay"
+            android:visibility="gone" />
+
+        <RelativeLayout
+            android:id="@+id/layout_alert_overlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone"
+            android:background="#121212"
+            android:clickable="true"
+            android:focusable="true">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_centerInParent="true"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="32dp">
+
+                <TextView
+                    android:id="@+id/tv_alert_icon"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔔"
+                    android:textSize="96sp"
+                    android:layout_marginBottom="24dp" />
+
+                <TextView
+                    android:id="@+id/tv_alert_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Alert Title"
+                    android:textColor="#FFFFFF"
+                    android:textSize="36sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:id="@+id/tv_alert_message"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Message body goes here"
+                    android:textColor="#CCCCCC"
+                    android:textSize="22sp"
+                    android:gravity="center"
+                    android:layout_marginBottom="24dp" />
+
+                <ProgressBar
+                    android:id="@+id/pb_alert_timer"
+                    style="?android:attr/progressBarStyleHorizontal"
+                    android:layout_width="320dp"
+                    android:layout_height="24dp"
+                    android:visibility="gone"
+                    android:layout_marginBottom="16dp" />
+
+                <TextView
+                    android:id="@+id/tv_alert_timer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00"
+                    android:textColor="#FFFFFF"
+                    android:textSize="48sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    android:layout_marginBottom="24dp" />
+
+                <LinearLayout
+                    android:id="@+id/layout_alert_buttons"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center">
+
+                    <Button
+                        android:id="@+id/btn_alert_action1"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Minimize"
+                        android:layout_marginEnd="16dp" />
+
+                    <Button
+                        android:id="@+id/btn_alert_action2"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Cancel Timer" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+        </RelativeLayout>
     </FrameLayout>
 
     <!-- Left drawer (swipe from left edge to open) -->
