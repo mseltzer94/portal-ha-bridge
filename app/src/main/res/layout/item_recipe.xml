@@ -3,8 +3,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="horizontal"
-    android:padding="12dp"
-    android:layout_marginBottom="8dp"
+    android:padding="16dp"
+    android:layout_marginBottom="10dp"
     android:background="@drawable/bg_minimized_timer"
     android:gravity="center_vertical"
     android:clickable="true"
@@ -12,10 +12,10 @@
 
     <ImageView
         android:id="@+id/iv_recipe_thumbnail"
-        android:layout_width="72dp"
-        android:layout_height="72dp"
+        android:layout_width="90dp"
+        android:layout_height="90dp"
         android:scaleType="centerCrop"
-        android:layout_marginEnd="12dp"
+        android:layout_marginEnd="16dp"
         android:background="#2A2A2A" />
 
     <LinearLayout
@@ -29,17 +29,17 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="20sp"
             android:textStyle="bold"
             android:ellipsize="end"
             android:maxLines="2"
-            android:layout_marginBottom="4dp" />
+            android:layout_marginBottom="6dp" />
 
         <TextView
             android:id="@+id/tv_recipe_time"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="#999999"
-            android:textSize="13sp" />
+            android:textSize="16sp" />
     </LinearLayout>
 </LinearLayout>

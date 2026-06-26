@@ -221,7 +221,7 @@
     <!-- Right drawer for Mealie recipes (slide out from right edge or button tap) -->
     <FrameLayout
         android:id="@+id/right_drawer"
-        android:layout_width="640dp"
+        android:layout_width="1024dp"
         android:layout_height="match_parent"
         android:layout_gravity="end"
         android:background="#121212"
@@ -249,7 +249,7 @@
                     android:layout_height="wrap_content"
                     android:text="My Recipes"
                     android:textColor="#FFFFFF"
-                    android:textSize="24sp"
+                    android:textSize="30sp"
                     android:textStyle="bold" />
 
                 <ImageButton
@@ -272,7 +272,7 @@
                 android:hint="Search recipes..."
                 android:textColorHint="#88FFFFFF"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"
+                android:textSize="18sp"
                 android:paddingStart="16dp"
                 android:paddingEnd="16dp"
                 android:paddingTop="10dp"
@@ -321,7 +321,7 @@
                     android:layout_weight="1"
                     android:layout_height="wrap_content"
                     android:textColor="#FFFFFF"
-                    android:textSize="18sp"
+                    android:textSize="22sp"
                     android:textStyle="bold"
                     android:ellipsize="end"
                     android:maxLines="1"
@@ -341,7 +341,7 @@
                         android:layout_height="wrap_content"
                         android:text="0.5x"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="16sp"
                         android:paddingStart="10dp"
                         android:paddingEnd="10dp"
                         android:paddingTop="6dp"
@@ -357,7 +357,7 @@
                         android:layout_height="wrap_content"
                         android:text="1x"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="16sp"
                         android:paddingStart="10dp"
                         android:paddingEnd="10dp"
                         android:paddingTop="6dp"
@@ -373,7 +373,7 @@
                         android:layout_height="wrap_content"
                         android:text="2x"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="16sp"
                         android:paddingStart="10dp"
                         android:paddingEnd="10dp"
                         android:paddingTop="6dp"
@@ -389,7 +389,7 @@
                         android:layout_height="wrap_content"
                         android:text="3x"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
+                        android:textSize="16sp"
                         android:paddingStart="10dp"
                         android:paddingEnd="10dp"
                         android:paddingTop="6dp"
@@ -409,7 +409,7 @@
                 
                 <!-- Left Pane: Description & Ingredients (Scrollable) -->
                 <ScrollView
-                    android:layout_width="250dp"
+                    android:layout_width="370dp"
                     android:layout_height="match_parent"
                     android:background="#161616"
                     android:scrollbars="vertical">
@@ -423,9 +423,9 @@
                         <ImageView
                             android:id="@+id/iv_detail_image"
                             android:layout_width="match_parent"
-                            android:layout_height="140dp"
+                            android:layout_height="200dp"
                             android:scaleType="centerCrop"
-                            android:layout_marginBottom="12dp"
+                            android:layout_marginBottom="16dp"
                             android:background="#2A2A2A" />
                             
                         <TextView
@@ -433,17 +433,17 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:textColor="#AAAAAA"
-                            android:textSize="13sp"
-                            android:layout_marginBottom="16dp" />
+                            android:textSize="16sp"
+                            android:layout_marginBottom="20dp" />
                             
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="Ingredients"
                             android:textColor="#FFFFFF"
-                            android:textSize="16sp"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:layout_marginBottom="8dp" />
+                            android:layout_marginBottom="12dp" />
                             
                         <LinearLayout
                             android:id="@+id/layout_detail_ingredients"
@@ -477,9 +477,9 @@
                             android:layout_height="wrap_content"
                             android:text="Instructions"
                             android:textColor="#FFFFFF"
-                            android:textSize="16sp"
+                            android:textSize="20sp"
                             android:textStyle="bold"
-                            android:layout_marginBottom="8dp" />
+                            android:layout_marginBottom="12dp" />
                             
                         <LinearLayout
                             android:id="@+id/layout_detail_instructions"

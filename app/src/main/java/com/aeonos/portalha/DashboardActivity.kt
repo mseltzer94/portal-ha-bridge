@@ -975,14 +975,14 @@ class DashboardActivity : AppCompatActivity() {
                     val tvCheck = TextView(this).apply {
                         this.text = "○"
                         this.setTextColor(android.graphics.Color.parseColor("#FF9800"))
-                        this.textSize = 18f
-                        this.setPadding(0, 0, 12, 0)
+                        this.textSize = 22f
+                        this.setPadding(0, 0, 14, 0)
                     }
                     
                     val tvText = TextView(this).apply {
                         this.text = displayStr
                         this.setTextColor(android.graphics.Color.WHITE)
-                        this.textSize = 14f
+                        this.textSize = 17f
                         this.layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -1046,8 +1046,8 @@ class DashboardActivity : AppCompatActivity() {
                     val tvStepDone = TextView(this).apply {
                         this.text = "○"
                         this.setTextColor(android.graphics.Color.parseColor("#FF9800"))
-                        this.textSize = 18f
-                        this.setPadding(0, 0, 12, 0)
+                        this.textSize = 22f
+                        this.setPadding(0, 0, 14, 0)
                         this.isClickable = true
                         this.isFocusable = true
                     }
@@ -1055,7 +1055,7 @@ class DashboardActivity : AppCompatActivity() {
                     val tvStepTitle = TextView(this).apply {
                         this.text = "Step ${i + 1}"
                         this.setTextColor(android.graphics.Color.WHITE)
-                        this.textSize = 15f
+                        this.textSize = 19f
                         this.setTypeface(null, android.graphics.Typeface.BOLD)
                         this.layoutParams = LinearLayout.LayoutParams(
                             0,
@@ -1067,7 +1067,7 @@ class DashboardActivity : AppCompatActivity() {
                     val tvStepArrow = TextView(this).apply {
                         this.text = "▲"
                         this.setTextColor(android.graphics.Color.GRAY)
-                        this.textSize = 14f
+                        this.textSize = 18f
                         this.setPadding(12, 0, 0, 0)
                     }
 
@@ -1088,7 +1088,7 @@ class DashboardActivity : AppCompatActivity() {
                     val tvStepText = TextView(this).apply {
                         this.text = text
                         this.setTextColor(android.graphics.Color.parseColor("#E0E0E0"))
-                        this.textSize = 14f
+                        this.textSize = 17f
                         this.layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             LinearLayout.LayoutParams.WRAP_CONTENT
@@ -1119,7 +1119,7 @@ class DashboardActivity : AppCompatActivity() {
 
                             val btnTimer = Button(this).apply {
                                 this.text = "⏳ $label"
-                                this.textSize = 12f
+                                this.textSize = 15f
                                 this.setTextColor(android.graphics.Color.WHITE)
                                 this.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#444466"))
                                 this.setOnClickListener {
