@@ -70,4 +70,9 @@ dependencies {
     // build cleanly under our Kotlin 2.0.20 — no metadata hacks.
     implementation("com.github.pedroSG94:RTSP-Server:1.3.0")
     implementation("com.github.pedroSG94.RootEncoder:library:2.4.6")
+
+    // Mealie recipe browser additions
+    implementation(libs.glide)
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }

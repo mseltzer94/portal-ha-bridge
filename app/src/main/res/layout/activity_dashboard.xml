@@ -146,6 +146,41 @@
             </LinearLayout>
 
         </RelativeLayout>
+
+        <!-- Minimized Floating Timer Badge -->
+        <LinearLayout
+            android:id="@+id/layout_minimized_timer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="16dp"
+            android:background="@drawable/bg_minimized_timer"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="10dp"
+            android:paddingBottom="10dp"
+            android:visibility="gone"
+            android:clickable="true"
+            android:focusable="true">
+            
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⏳"
+                android:textSize="18sp"
+                android:layout_marginEnd="8dp" />
+                
+            <TextView
+                android:id="@+id/tv_minimized_timer_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </FrameLayout>
 
     <!-- Left drawer (swipe from left edge to open) -->
@@ -182,5 +217,158 @@
             android:backgroundTint="#3A3A5C" />
 
     </LinearLayout>
+
+    <!-- Right drawer for Mealie recipes (slide out from right edge or button tap) -->
+    <FrameLayout
+        android:id="@+id/right_drawer"
+        android:layout_width="480dp"
+        android:layout_height="match_parent"
+        android:layout_gravity="end"
+        android:background="#121212"
+        android:clickable="true"
+        android:focusable="true">
+        
+        <!-- Recipe list container -->
+        <LinearLayout
+            android:id="@+id/layout_recipe_list"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:padding="16dp">
+            
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="16dp">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:text="My Recipes"
+                    android:textColor="#FFFFFF"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+
+                <ImageButton
+                    android:id="@+id/btn_refresh_recipes"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@android:drawable/ic_menu_rotate"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Refresh"
+                    android:tint="#FFFFFF" />
+            </LinearLayout>
+                
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_recipes"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:scrollbars="vertical" />
+        </LinearLayout>
+
+        <!-- Recipe detail container (initially hidden, overlayed on top of list) -->
+        <LinearLayout
+            android:id="@+id/layout_recipe_detail"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="#121212">
+            
+            <!-- Detail Header with Back button -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:padding="16dp"
+                android:background="#1A1A1A">
+                
+                <ImageButton
+                    android:id="@+id/btn_recipe_back"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:src="@android:drawable/ic_menu_revert"
+                    android:background="?android:attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="Back"
+                    android:tint="#FFFFFF" />
+                    
+                <TextView
+                    android:id="@+id/tv_detail_title"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:layout_marginStart="8dp" />
+            </LinearLayout>
+            
+            <!-- Scrollable content -->
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+                
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+                    
+                    <ImageView
+                        android:id="@+id/iv_detail_image"
+                        android:layout_width="match_parent"
+                        android:layout_height="200dp"
+                        android:scaleType="centerCrop"
+                        android:layout_marginBottom="16dp"
+                        android:background="#2A2A2A" />
+                        
+                    <TextView
+                        android:id="@+id/tv_detail_description"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#CCCCCC"
+                        android:textSize="15sp"
+                        android:layout_marginBottom="16dp" />
+                        
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Ingredients"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="8dp" />
+                        
+                    <LinearLayout
+                        android:id="@+id/layout_detail_ingredients"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:layout_marginBottom="16dp" />
+                        
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Instructions"
+                        android:textColor="#FFFFFF"
+                        android:textSize="18sp"
+                        android:textStyle="bold"
+                        android:layout_marginBottom="8dp" />
+                        
+                    <LinearLayout
+                        android:id="@+id/layout_detail_instructions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+    </FrameLayout>
 
 </androidx.drawerlayout.widget.DrawerLayout>

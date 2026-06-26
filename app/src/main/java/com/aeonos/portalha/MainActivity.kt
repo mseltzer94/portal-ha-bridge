@@ -28,6 +28,11 @@ class MainActivity : AppCompatActivity() {
         val etHaUrl = findViewById<EditText>(R.id.et_ha_url)
         etHaUrl.setText(prefs.haUrl)
 
+        val etMealieUrl = findViewById<EditText>(R.id.et_mealie_url)
+        val etMealieToken = findViewById<EditText>(R.id.et_mealie_token)
+        etMealieUrl.setText(prefs.mealieUrl)
+        etMealieToken.setText(prefs.mealieToken)
+
         // Back to the dashboard (MainActivity is always opened from it)
         findViewById<Button>(R.id.btn_back).setOnClickListener { finish() }
 
@@ -86,6 +91,8 @@ class MainActivity : AppCompatActivity() {
             prefs.password = etPass.text.toString()
             prefs.deviceName = etName.text.toString().trim().ifEmpty { "Portal" }
             prefs.haUrl = etHaUrl.text.toString().trim()
+            prefs.mealieUrl = etMealieUrl.text.toString().trim()
+            prefs.mealieToken = etMealieToken.text.toString().trim()
             BridgeService.stop(this)
             BridgeService.start(this)
             updateStatus()

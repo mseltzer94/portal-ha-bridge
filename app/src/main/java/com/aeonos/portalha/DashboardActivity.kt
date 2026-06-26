@@ -10,10 +10,22 @@ import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
 import android.widget.Button
 import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONObject
+import org.json.JSONArray
 import android.os.CountDownTimer
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.bumptech.glide.Glide
+import kotlinx.coroutines.*
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.net.HttpURLConnection
+import java.net.URL
 
 class DashboardActivity : AppCompatActivity() {
 
@@ -39,6 +51,34 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var btnAlertAction2: Button
     private var alertTimer: CountDownTimer? = null
     private var activeAlertId: String? = null
+
+    // Mealie Sidebar & Timers views
+    private lateinit var rightDrawer: android.view.View
+    private lateinit var layoutRecipeList: android.view.View
+    private lateinit var rvRecipes: RecyclerView
+    private lateinit var layoutRecipeDetail: android.view.View
+    private lateinit var btnRecipeBack: ImageButton
+    private lateinit var btnRefreshRecipes: ImageButton
+    private lateinit var tvDetailTitle: TextView
+    private lateinit var ivDetailImage: ImageView
+    private lateinit var tvDetailDescription: TextView
+    private lateinit var layoutDetailIngredients: android.view.ViewGroup
+    private lateinit var layoutDetailInstructions: android.view.ViewGroup
+
+    // Minimized Timer views
+    private lateinit var layoutMinimizedTimer: android.view.View
+    private lateinit var tvMinimizedTimerText: TextView
+
+    // Native Timer state
+    private var nativeCountDownTimer: CountDownTimer? = null
+    private var nativeTimerTotalMs: Long = 0L
+    private var nativeTimerRemainingMs: Long = 0L
+    private var nativeTimerTitle: String = ""
+    private var nativeTimerMessage: String = ""
+    private var nativeTimerIsMinimized: Boolean = false
+
+    private lateinit var recipeAdapter: RecipeAdapter
+    private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -72,6 +112,55 @@ class DashboardActivity : AppCompatActivity() {
 
         drawer = findViewById(R.id.drawer_layout)
         webView = findViewById(R.id.web_view)
+
+        // Initialize Mealie Sidebar & Minimized Timer views
+        rightDrawer = findViewById(R.id.right_drawer)
+        layoutRecipeList = findViewById(R.id.layout_recipe_list)
+        rvRecipes = findViewById(R.id.rv_recipes)
+        layoutRecipeDetail = findViewById(R.id.layout_recipe_detail)
+        btnRecipeBack = findViewById(R.id.btn_recipe_back)
+        btnRefreshRecipes = findViewById(R.id.btn_refresh_recipes)
+        tvDetailTitle = findViewById(R.id.tv_detail_title)
+        ivDetailImage = findViewById(R.id.iv_detail_image)
+        tvDetailDescription = findViewById(R.id.tv_detail_description)
+        layoutDetailIngredients = findViewById(R.id.layout_detail_ingredients)
+        layoutDetailInstructions = findViewById(R.id.layout_detail_instructions)
+
+        layoutMinimizedTimer = findViewById(R.id.layout_minimized_timer)
+        tvMinimizedTimerText = findViewById(R.id.tv_minimized_timer_text)
+
+        // Restore maximized timer if the minimized badge is clicked
+        layoutMinimizedTimer.setOnClickListener {
+            nativeTimerIsMinimized = false
+            updateTimerUI()
+        }
+
+        btnRecipeBack.setOnClickListener {
+            showRecipeList()
+        }
+
+        btnRefreshRecipes.setOnClickListener {
+            loadRecipes()
+        }
+
+        rvRecipes.layoutManager = LinearLayoutManager(this)
+        recipeAdapter = RecipeAdapter(prefs.mealieUrl) { recipe ->
+            loadRecipeDetails(recipe)
+        }
+        rvRecipes.adapter = recipeAdapter
+
+        drawer.addDrawerListener(object : DrawerLayout.DrawerListener {
+            override fun onDrawerSlide(drawerView: android.view.View, slideOffset: Float) {}
+            override fun onDrawerOpened(drawerView: android.view.View) {
+                if (drawerView == rightDrawer) {
+                    loadRecipes()
+                }
+            }
+            override fun onDrawerClosed(drawerView: android.view.View) {}
+            override fun onDrawerStateChanged(newState: Int) {}
+        })
+
+        loadRecipes()
 
         webView.settings.apply {
             javaScriptEnabled = true
@@ -120,6 +209,10 @@ class DashboardActivity : AppCompatActivity() {
                         url.substringAfter("portal://")
                     } else {
                         url.substringAfter("portal-url://")
+                    }
+                    if (target.equals("recipes", ignoreCase = true)) {
+                        openRecipesSidebar()
+                        return true
                     }
                     if (target.isNotEmpty()) {
                         showUrlOverlay(target)
@@ -306,6 +399,9 @@ class DashboardActivity : AppCompatActivity() {
         if (displayAlert.isNotEmpty() && displayAlert.uppercase() != "OFF") {
             showAlertOverlay(displayAlert)
         }
+
+        // Reload recipes on resume
+        loadRecipes()
     }
 
     private fun dismissKeyguard() {
@@ -377,6 +473,13 @@ class DashboardActivity : AppCompatActivity() {
     override fun onBackPressed() {
         when {
             drawer.isDrawerOpen(GravityCompat.START) -> drawer.closeDrawer(GravityCompat.START)
+            drawer.isDrawerOpen(GravityCompat.END) -> {
+                if (layoutRecipeDetail.visibility == android.view.View.VISIBLE) {
+                    showRecipeList()
+                } else {
+                    drawer.closeDrawer(GravityCompat.END)
+                }
+            }
             alertOverlay.visibility == android.view.View.VISIBLE -> hideAlertOverlay()
             overlayWebView.visibility == android.view.View.VISIBLE && overlayWebView.canGoBack() -> overlayWebView.goBack()
             overlayWebView.visibility == android.view.View.VISIBLE -> hideUrlOverlay()
@@ -392,6 +495,8 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        activityScope.cancel()
+        nativeCountDownTimer?.cancel()
         stopRtspStream()
         super.onDestroy()
     }
@@ -430,6 +535,16 @@ class DashboardActivity : AppCompatActivity() {
         try {
             val json = JSONObject(payload)
             activeAlertId = json.optString("id", "alert")
+
+            val type = json.optString("type", "alert")
+            val durationSeconds = json.optInt("duration_seconds", 0)
+
+            if (type == "timer" && durationSeconds > 0) {
+                val title = json.optString("title", "Timer")
+                val message = json.optString("message", "")
+                startNativeTimer(title, message, durationSeconds, activeAlertId ?: "alert")
+                return
+            }
 
             tvAlertTitle.text = json.optString("title", "Alert")
             tvAlertMessage.text = json.optString("message", "")
@@ -494,42 +609,17 @@ class DashboardActivity : AppCompatActivity() {
                 layoutAlertButtons.visibility = android.view.View.GONE
             }
 
-            val type = json.optString("type", "alert")
-            val durationSeconds = json.optInt("duration_seconds", 0)
-
             if (durationSeconds > 0) {
                 val totalMs = durationSeconds * 1000L
-                if (type == "timer") {
-                    pbAlertTimer.visibility = android.view.View.VISIBLE
-                    tvAlertTimer.visibility = android.view.View.VISIBLE
-                    pbAlertTimer.progressTintList = android.content.res.ColorStateList.valueOf(accentColor)
-
-                    alertTimer = object : CountDownTimer(totalMs, 1000L) {
-                        override fun onTick(millisUntilFinished: Long) {
-                            val secs = millisUntilFinished / 1000
-                            val minPart = secs / 60
-                            val secPart = secs % 60
-                            tvAlertTimer.text = "%02d:%02d".format(minPart, secPart)
-                            
-                            val progress = ((millisUntilFinished.toFloat() / totalMs.toFloat()) * 100).toInt()
-                            pbAlertTimer.progress = progress
-                        }
-
-                        override fun onFinish() {
-                            hideAlertOverlay()
-                        }
-                    }.start()
-                } else {
-                    pbAlertTimer.visibility = android.view.View.GONE
-                    tvAlertTimer.visibility = android.view.View.GONE
-                    
-                    alertTimer = object : CountDownTimer(totalMs, totalMs) {
-                        override fun onTick(millisUntilFinished: Long) {}
-                        override fun onFinish() {
-                            hideAlertOverlay()
-                        }
-                    }.start()
-                }
+                pbAlertTimer.visibility = android.view.View.GONE
+                tvAlertTimer.visibility = android.view.View.GONE
+                
+                alertTimer = object : CountDownTimer(totalMs, totalMs) {
+                    override fun onTick(millisUntilFinished: Long) {}
+                    override fun onFinish() {
+                        hideAlertOverlay()
+                    }
+                }.start()
             } else {
                 pbAlertTimer.visibility = android.view.View.GONE
                 tvAlertTimer.visibility = android.view.View.GONE
@@ -546,6 +636,12 @@ class DashboardActivity : AppCompatActivity() {
     private fun hideAlertOverlay() {
         alertTimer?.cancel()
         alertTimer = null
+
+        nativeCountDownTimer?.cancel()
+        nativeCountDownTimer = null
+        nativeTimerRemainingMs = 0
+        layoutMinimizedTimer.visibility = android.view.View.GONE
+
         activeAlertId = null
 
         alertOverlay.visibility = android.view.View.GONE
@@ -632,6 +728,347 @@ class DashboardActivity : AppCompatActivity() {
 
         player = newPlayer
         playerView.player = newPlayer
+    }
+
+    private fun openRecipesSidebar() {
+        drawer.openDrawer(GravityCompat.END)
+        loadRecipes()
+    }
+
+    private fun showRecipeList() {
+        layoutRecipeDetail.visibility = android.view.View.GONE
+        layoutRecipeList.visibility = android.view.View.VISIBLE
+    }
+
+    private fun loadRecipes() {
+        val url = prefs.mealieUrl.trim()
+        val token = prefs.mealieToken.trim()
+        if (url.isEmpty() || token.isEmpty()) {
+            recipeAdapter.setRecipes(emptyList())
+            return
+        }
+        activityScope.launch {
+            val endpoint = "${url.trimEnd('/')}/api/recipes?per_page=150"
+            val response = getJsonFromUrl(endpoint, token)
+            if (response != null) {
+                try {
+                    val json = JSONObject(response)
+                    val itemsArray = json.optJSONArray("items")
+                    val list = mutableListOf<JSONObject>()
+                    if (itemsArray != null) {
+                        for (i in 0 until itemsArray.length()) {
+                            val item = itemsArray.optJSONObject(i)
+                            if (item != null) list.add(item)
+                        }
+                    }
+                    recipeAdapter.setRecipes(list)
+                } catch (e: Exception) {
+                    android.util.Log.e("PortalHA", "Failed to parse recipes: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun loadRecipeDetails(recipe: JSONObject) {
+        val slug = recipe.optString("slug", "")
+        val url = prefs.mealieUrl.trim()
+        val token = prefs.mealieToken.trim()
+        if (slug.isEmpty() || url.isEmpty() || token.isEmpty()) return
+
+        // Show detail layout, hide list layout
+        layoutRecipeList.visibility = android.view.View.GONE
+        layoutRecipeDetail.visibility = android.view.View.VISIBLE
+
+        // Set title and placeholder image
+        tvDetailTitle.text = recipe.optString("name", "")
+        ivDetailImage.setImageResource(android.R.drawable.ic_menu_gallery)
+        tvDetailDescription.text = recipe.optString("description", "")
+        layoutDetailIngredients.removeAllViews()
+        layoutDetailInstructions.removeAllViews()
+
+        // Load image banner
+        val id = recipe.optString("id", "")
+        if (id.isNotEmpty()) {
+            val imageUrl = "${url.trimEnd('/')}/api/media/recipes/$id/images/original.webp"
+            Glide.with(this)
+                .load(imageUrl)
+                .placeholder(android.R.drawable.ic_menu_gallery)
+                .error(android.R.drawable.ic_menu_gallery)
+                .into(ivDetailImage)
+        }
+
+        // Fetch details
+        activityScope.launch {
+            val endpoint = "${url.trimEnd('/')}/api/recipes/$slug"
+            val response = getJsonFromUrl(endpoint, token)
+            if (response != null) {
+                try {
+                    val detailedJson = JSONObject(response)
+                    renderRecipeDetails(detailedJson)
+                } catch (e: Exception) {
+                    android.util.Log.e("PortalHA", "Failed to parse recipe details: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private fun renderRecipeDetails(json: JSONObject) {
+        tvDetailDescription.text = json.optString("description", "")
+
+        val ingredientsArray = json.optJSONArray("recipeIngredient")
+        layoutDetailIngredients.removeAllViews()
+        if (ingredientsArray != null) {
+            for (i in 0 until ingredientsArray.length()) {
+                val ing = ingredientsArray.optJSONObject(i) ?: continue
+                val text = ing.optString("originalText", "").ifEmpty { ing.optString("display", "") }
+                if (text.isNotEmpty()) {
+                    val tv = TextView(this).apply {
+                        this.text = "• $text"
+                        this.setTextColor(android.graphics.Color.WHITE)
+                        this.textSize = 15f
+                        this.setPadding(0, 4, 0, 4)
+                    }
+                    layoutDetailIngredients.addView(tv)
+                }
+            }
+        }
+
+        val instructionsArray = json.optJSONArray("recipeInstructions")
+        layoutDetailInstructions.removeAllViews()
+        if (instructionsArray != null) {
+            val recipeName = json.optString("name", "Recipe")
+            for (i in 0 until instructionsArray.length()) {
+                val step = instructionsArray.optJSONObject(i) ?: continue
+                val text = step.optString("text", "")
+                if (text.isNotEmpty()) {
+                    val stepContainer = LinearLayout(this).apply {
+                        this.orientation = LinearLayout.HORIZONTAL
+                        this.setPadding(0, 8, 0, 8)
+                        this.gravity = android.view.Gravity.CENTER_VERTICAL
+                    }
+
+                    val tvStep = TextView(this).apply {
+                        this.text = "${i + 1}. $text"
+                        this.setTextColor(android.graphics.Color.WHITE)
+                        this.textSize = 15f
+                        this.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    stepContainer.addView(tvStep)
+
+                    val timers = parseTimersFromText(text)
+                    if (timers.isNotEmpty()) {
+                        val timerContainer = LinearLayout(this).apply {
+                            this.orientation = LinearLayout.VERTICAL
+                            this.setPadding(12, 0, 0, 0)
+                            this.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                        }
+
+                        for (seconds in timers) {
+                            val mins = seconds / 60
+                            val label = if (mins >= 60) {
+                                val hrs = mins / 60
+                                val rem = mins % 60
+                                if (rem > 0) "${hrs}h ${rem}m" else "${hrs}h"
+                            } else {
+                                "${mins}m"
+                            }
+
+                            val btnTimer = Button(this).apply {
+                                this.text = "⏳ $label"
+                                this.textSize = 12f
+                                this.setTextColor(android.graphics.Color.WHITE)
+                                this.backgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#444466"))
+                                this.setOnClickListener {
+                                    startNativeTimer(recipeName, "Step ${i + 1}: $text", seconds)
+                                }
+                            }
+                            timerContainer.addView(btnTimer)
+                        }
+                        stepContainer.addView(timerContainer)
+                    }
+
+                    layoutDetailInstructions.addView(stepContainer)
+                }
+            }
+        }
+    }
+
+    private fun parseTimersFromText(text: String): List<Int> {
+        val secondsList = mutableListOf<Int>()
+        val regex = Regex("""(?i)\b(?:(\d+(?:\.\d+)?)\s*-\s*)?(\d+(?:\.\d+)?)\s*(second|sec|minute|min|hour|hr)s?\b""")
+        val matches = regex.findAll(text)
+        for (match in matches) {
+            val numStr = match.groupValues[2]
+            val unitStr = match.groupValues[3].lowercase()
+            val number = numStr.toDoubleOrNull() ?: continue
+            val multiplier = when {
+                unitStr.startsWith("sec") -> 1
+                unitStr.startsWith("min") -> 60
+                unitStr.startsWith("hour") || unitStr.startsWith("hr") -> 3600
+                else -> 60
+            }
+            val lowerStr = match.groupValues[1]
+            if (lowerStr.isNotEmpty()) {
+                val lowerNum = lowerStr.toDoubleOrNull()
+                if (lowerNum != null) {
+                    secondsList.add((lowerNum * multiplier).toInt())
+                }
+            }
+            secondsList.add((number * multiplier).toInt())
+        }
+        
+        if (secondsList.isEmpty()) {
+            val clean = text.lowercase()
+            if (clean.contains("an hour") || clean.contains("a hour")) {
+                secondsList.add(3600)
+            } else if (clean.contains("a minute") || clean.contains("one minute")) {
+                secondsList.add(60)
+            }
+        }
+        return secondsList
+    }
+
+    private fun startNativeTimer(title: String, message: String, durationSeconds: Int, alertId: String = "alert") {
+        nativeCountDownTimer?.cancel()
+        nativeCountDownTimer = null
+
+        activeAlertId = alertId
+        nativeTimerTitle = title
+        nativeTimerMessage = message
+        nativeTimerTotalMs = durationSeconds * 1000L
+        nativeTimerRemainingMs = nativeTimerTotalMs
+        nativeTimerIsMinimized = false
+
+        tvAlertTitle.text = title
+        tvAlertMessage.text = message
+        tvAlertIcon.text = "⏳"
+        alertOverlay.setBackgroundColor(android.graphics.Color.parseColor("#121212"))
+        
+        layoutAlertButtons.visibility = android.view.View.VISIBLE
+        btnAlertAction1.visibility = android.view.View.VISIBLE
+        btnAlertAction1.text = "Minimize"
+        btnAlertAction1.setOnClickListener {
+            minimizeNativeTimer()
+        }
+        
+        btnAlertAction2.visibility = android.view.View.VISIBLE
+        btnAlertAction2.text = "Cancel Timer"
+        btnAlertAction2.setOnClickListener {
+            cancelNativeTimer()
+        }
+
+        pbAlertTimer.visibility = android.view.View.VISIBLE
+        tvAlertTimer.visibility = android.view.View.VISIBLE
+        pbAlertTimer.progressTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#FF9800"))
+
+        nativeCountDownTimer = object : CountDownTimer(nativeTimerTotalMs, 1000L) {
+            override fun onTick(millisUntilFinished: Long) {
+                nativeTimerRemainingMs = millisUntilFinished
+                updateTimerUI()
+            }
+
+            override fun onFinish() {
+                nativeTimerRemainingMs = 0
+                updateTimerUI()
+                onNativeTimerFinished()
+            }
+        }.start()
+
+        alertOverlay.visibility = android.view.View.VISIBLE
+        layoutMinimizedTimer.visibility = android.view.View.GONE
+        alertOverlay.requestFocus()
+    }
+
+    private fun minimizeNativeTimer() {
+        nativeTimerIsMinimized = true
+        updateTimerUI()
+        webView.requestFocus()
+    }
+
+    private fun cancelNativeTimer() {
+        nativeCountDownTimer?.cancel()
+        nativeCountDownTimer = null
+        nativeTimerRemainingMs = 0
+        layoutMinimizedTimer.visibility = android.view.View.GONE
+        alertOverlay.visibility = android.view.View.GONE
+        webView.requestFocus()
+        BridgeService.setDisplayAlert(this, "OFF")
+    }
+
+    private fun updateTimerUI() {
+        val secs = nativeTimerRemainingMs / 1000
+        val minPart = secs / 60
+        val secPart = secs % 60
+        val timeStr = "%02d:%02d".format(minPart, secPart)
+
+        if (nativeTimerIsMinimized) {
+            tvMinimizedTimerText.text = timeStr
+            layoutMinimizedTimer.visibility = android.view.View.VISIBLE
+            alertOverlay.visibility = android.view.View.GONE
+        } else {
+            tvAlertTimer.text = timeStr
+            val progress = if (nativeTimerTotalMs > 0) {
+                ((nativeTimerRemainingMs.toFloat() / nativeTimerTotalMs.toFloat()) * 100).toInt()
+            } else 0
+            pbAlertTimer.progress = progress
+            alertOverlay.visibility = android.view.View.VISIBLE
+            layoutMinimizedTimer.visibility = android.view.View.GONE
+        }
+    }
+
+    private fun onNativeTimerFinished() {
+        nativeTimerIsMinimized = false
+        updateTimerUI()
+        
+        tvAlertTitle.text = "Timer Finished!"
+        tvAlertMessage.text = "$nativeTimerTitle\n$nativeTimerMessage"
+        tvAlertTimer.text = "00:00"
+        pbAlertTimer.progress = 0
+        
+        btnAlertAction1.visibility = android.view.View.GONE
+        btnAlertAction2.text = "Dismiss"
+        btnAlertAction2.setOnClickListener {
+            cancelNativeTimer()
+        }
+        
+        alertOverlay.visibility = android.view.View.VISIBLE
+        alertOverlay.requestFocus()
+        
+        TonePlayer.play("alert")
+    }
+
+    private suspend fun getJsonFromUrl(urlString: String, token: String): String? = withContext(Dispatchers.IO) {
+        var connection: HttpURLConnection? = null
+        try {
+            val url = URL(urlString)
+            connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            if (token.isNotEmpty()) {
+                connection.setRequestProperty("Authorization", "Bearer $token")
+            }
+            connection.connectTimeout = 8000
+            connection.readTimeout = 8000
+            
+            val responseCode = connection.responseCode
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                val reader = BufferedReader(InputStreamReader(connection.inputStream))
+                val response = StringBuilder()
+                var line: String?
+                while (reader.readLine().also { line = it } != null) {
+                    response.append(line)
+                }
+                reader.close()
+                response.toString()
+            } else {
+                android.util.Log.e("PortalHA", "HTTP Error $responseCode fetching $urlString")
+                null
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("PortalHA", "Error fetching $urlString: ${e.message}")
+            null
+        } finally {
+            connection?.disconnect()
+        }
     }
 
     private fun stopRtspStream() {
