@@ -537,6 +537,7 @@ class DashboardActivity : AppCompatActivity() {
     override fun onDestroy() {
         activityScope.cancel()
         nativeCountDownTimer?.cancel()
+        TonePlayer.stopLooping()
         stopRtspStream()
         super.onDestroy()
     }
@@ -1279,6 +1280,7 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun cancelNativeTimer() {
+        TonePlayer.stopLooping()
         nativeCountDownTimer?.cancel()
         nativeCountDownTimer = null
         nativeTimerRemainingMs = 0
@@ -1327,7 +1329,7 @@ class DashboardActivity : AppCompatActivity() {
         alertOverlay.visibility = android.view.View.VISIBLE
         alertOverlay.requestFocus()
         
-        TonePlayer.play("alert")
+        TonePlayer.playLooping()
     }
 
     private suspend fun getJsonFromUrl(urlString: String, token: String): String? = withContext(Dispatchers.IO) {

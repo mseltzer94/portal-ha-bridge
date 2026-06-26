@@ -45,6 +45,49 @@ object TonePlayer {
         }.also { it.isDaemon = true }.start()
     }
 
+    // ── Looping alarm ─────────────────────────────────────────────────────────
+    // Keeps repeating the alert tone with a short pause between repetitions
+    // until stopLooping() is called.  Safe to call from any thread.
+
+    @Volatile private var loopingActive = false
+
+    fun playLooping() {
+        if (loopingActive) return          // already running
+        loopingActive = true
+        val pcm = alert()
+        val durationMs = pcm.size * 1000L / SAMPLE_RATE
+        Thread {
+            while (loopingActive) {
+                runCatching {
+                    val track = AudioTrack.Builder()
+                        .setAudioAttributes(AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build())
+                        .setAudioFormat(AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                            .setSampleRate(SAMPLE_RATE)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build())
+                        .setTransferMode(AudioTrack.MODE_STATIC)
+                        .setBufferSizeInBytes(pcm.size * 2)
+                        .build()
+                    track.write(pcm, 0, pcm.size)
+                    track.play()
+                    Thread.sleep(durationMs + 200)
+                    track.stop()
+                    track.release()
+                }.onFailure { Log.w(TAG, "looping alarm failed: ${it.message}") }
+                // Pause between repetitions (only if still looping)
+                if (loopingActive) Thread.sleep(800)
+            }
+        }.also { it.isDaemon = true }.start()
+    }
+
+    fun stopLooping() {
+        loopingActive = false
+    }
+
     // Classic two-tone "ding-dong" chime (E5 then C5)
     private fun doorbell(): ShortArray {
         val ding = tone(659.25, 0.45, decay = 4.0)
