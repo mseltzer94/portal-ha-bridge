@@ -21,6 +21,8 @@ import android.os.CountDownTimer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
+import com.bumptech.glide.load.model.GlideUrl
+import com.bumptech.glide.load.model.LazyHeaders
 import kotlinx.coroutines.*
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -80,6 +82,15 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var recipeAdapter: RecipeAdapter
     private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
+    private var activeRecipeJson: JSONObject? = null
+    private var currentMultiplier: Double = 1.0
+
+    private lateinit var etRecipeSearch: android.widget.EditText
+    private lateinit var btnScaleHalf: TextView
+    private lateinit var btnScaleOne: TextView
+    private lateinit var btnScaleTwo: TextView
+    private lateinit var btnScaleThree: TextView
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -126,6 +137,12 @@ class DashboardActivity : AppCompatActivity() {
         layoutDetailIngredients = findViewById(R.id.layout_detail_ingredients)
         layoutDetailInstructions = findViewById(R.id.layout_detail_instructions)
 
+        etRecipeSearch = findViewById(R.id.et_recipe_search)
+        btnScaleHalf = findViewById(R.id.btn_scale_half)
+        btnScaleOne = findViewById(R.id.btn_scale_one)
+        btnScaleTwo = findViewById(R.id.btn_scale_two)
+        btnScaleThree = findViewById(R.id.btn_scale_three)
+
         layoutMinimizedTimer = findViewById(R.id.layout_minimized_timer)
         tvMinimizedTimerText = findViewById(R.id.tv_minimized_timer_text)
 
@@ -143,8 +160,31 @@ class DashboardActivity : AppCompatActivity() {
             loadRecipes()
         }
 
+        etRecipeSearch.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                recipeAdapter.filter(s?.toString() ?: "")
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
+        val scaleClickListener = android.view.View.OnClickListener { view ->
+            val mul = when (view.id) {
+                R.id.btn_scale_half -> 0.5
+                R.id.btn_scale_one -> 1.0
+                R.id.btn_scale_two -> 2.0
+                R.id.btn_scale_three -> 3.0
+                else -> 1.0
+            }
+            setRecipeMultiplier(mul)
+        }
+        btnScaleHalf.setOnClickListener(scaleClickListener)
+        btnScaleOne.setOnClickListener(scaleClickListener)
+        btnScaleTwo.setOnClickListener(scaleClickListener)
+        btnScaleThree.setOnClickListener(scaleClickListener)
+
         rvRecipes.layoutManager = LinearLayoutManager(this)
-        recipeAdapter = RecipeAdapter(prefs.mealieUrl) { recipe ->
+        recipeAdapter = RecipeAdapter(prefs.mealieUrl, prefs.mealieToken) { recipe ->
             loadRecipeDetails(recipe)
         }
         rvRecipes.adapter = recipeAdapter
@@ -775,9 +815,15 @@ class DashboardActivity : AppCompatActivity() {
         val token = prefs.mealieToken.trim()
         if (slug.isEmpty() || url.isEmpty() || token.isEmpty()) return
 
+        activeRecipeJson = null
+        currentMultiplier = 1.0
+
         // Show detail layout, hide list layout
         layoutRecipeList.visibility = android.view.View.GONE
         layoutRecipeDetail.visibility = android.view.View.VISIBLE
+
+        // Reset scaling button visuals
+        setRecipeMultiplier(1.0)
 
         // Set title and placeholder image
         tvDetailTitle.text = recipe.optString("name", "")
@@ -790,8 +836,18 @@ class DashboardActivity : AppCompatActivity() {
         val id = recipe.optString("id", "")
         if (id.isNotEmpty()) {
             val imageUrl = "${url.trimEnd('/')}/api/media/recipes/$id/images/original.webp"
+            val glideUrl = if (token.isNotEmpty()) {
+                GlideUrl(
+                    imageUrl,
+                    LazyHeaders.Builder()
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                )
+            } else {
+                imageUrl
+            }
             Glide.with(this)
-                .load(imageUrl)
+                .load(glideUrl)
                 .placeholder(android.R.drawable.ic_menu_gallery)
                 .error(android.R.drawable.ic_menu_gallery)
                 .into(ivDetailImage)
@@ -804,11 +860,47 @@ class DashboardActivity : AppCompatActivity() {
             if (response != null) {
                 try {
                     val detailedJson = JSONObject(response)
+                    activeRecipeJson = detailedJson
                     renderRecipeDetails(detailedJson)
                 } catch (e: Exception) {
                     android.util.Log.e("PortalHA", "Failed to parse recipe details: ${e.message}")
                 }
             }
+        }
+    }
+
+    private fun setRecipeMultiplier(multiplier: Double) {
+        currentMultiplier = multiplier
+        
+        btnScaleHalf.setBackgroundResource(if (multiplier == 0.5) R.drawable.bg_scale_btn_selected else R.drawable.bg_scale_btn_unselected)
+        btnScaleOne.setBackgroundResource(if (multiplier == 1.0) R.drawable.bg_scale_btn_selected else R.drawable.bg_scale_btn_unselected)
+        btnScaleTwo.setBackgroundResource(if (multiplier == 2.0) R.drawable.bg_scale_btn_selected else R.drawable.bg_scale_btn_unselected)
+        btnScaleThree.setBackgroundResource(if (multiplier == 3.0) R.drawable.bg_scale_btn_selected else R.drawable.bg_scale_btn_unselected)
+        
+        activeRecipeJson?.let { renderRecipeDetails(it) }
+    }
+
+    private fun formatQuantity(value: Double): String {
+        if (value <= 0.0) return ""
+        val intPart = value.toInt()
+        val fracPart = value - intPart
+        
+        val fracStr = when {
+            Math.abs(fracPart - 0.0) < 0.01 -> ""
+            Math.abs(fracPart - 0.25) < 0.02 -> "1/4"
+            Math.abs(fracPart - 0.333) < 0.04 -> "1/3"
+            Math.abs(fracPart - 0.5) < 0.02 -> "1/2"
+            Math.abs(fracPart - 0.666) < 0.04 -> "2/3"
+            Math.abs(fracPart - 0.75) < 0.02 -> "3/4"
+            Math.abs(fracPart - 0.125) < 0.02 -> "1/8"
+            else -> "%.2f".format(fracPart).trimStart('0')
+        }
+        
+        return when {
+            intPart > 0 && fracStr.isNotEmpty() -> "$intPart $fracStr"
+            intPart > 0 -> "$intPart"
+            fracStr.isNotEmpty() -> fracStr
+            else -> "%.2f".format(value)
         }
     }
 
@@ -820,15 +912,103 @@ class DashboardActivity : AppCompatActivity() {
         if (ingredientsArray != null) {
             for (i in 0 until ingredientsArray.length()) {
                 val ing = ingredientsArray.optJSONObject(i) ?: continue
-                val text = ing.optString("originalText", "").ifEmpty { ing.optString("display", "") }
-                if (text.isNotEmpty()) {
-                    val tv = TextView(this).apply {
-                        this.text = "• $text"
-                        this.setTextColor(android.graphics.Color.WHITE)
-                        this.textSize = 15f
-                        this.setPadding(0, 4, 0, 4)
+                val originalText = ing.optString("originalText", "").ifEmpty { ing.optString("display", "") }
+                val quantity = ing.optDouble("quantity", 0.0)
+                
+                val displayStr = if (quantity > 0.0 && !ing.optBoolean("disableAmount", false)) {
+                    val scaledQty = quantity * currentMultiplier
+                    val qtyStr = formatQuantity(scaledQty)
+                    
+                    val unitObj = ing.optJSONObject("unit")
+                    val unitStr = if (unitObj != null) {
+                        if (scaledQty > 1.0) {
+                            unitObj.optString("pluralName").ifEmpty { unitObj.optString("name") }
+                        } else {
+                            unitObj.optString("name")
+                        }
+                    } else {
+                        ing.optString("unit", "")
                     }
-                    layoutDetailIngredients.addView(tv)
+                    
+                    val foodObj = ing.optJSONObject("food")
+                    val foodStr = if (foodObj != null) {
+                        foodObj.optString("name")
+                    } else {
+                        ing.optString("food", "")
+                    }
+                    
+                    val note = ing.optString("note", "")
+                    
+                    if (foodStr.isNotEmpty()) {
+                        val sb = StringBuilder(qtyStr)
+                        if (unitStr.isNotEmpty()) {
+                            sb.append(" ").append(unitStr)
+                        }
+                        sb.append(" ").append(foodStr)
+                        if (note.isNotEmpty()) {
+                            sb.append(", ").append(note)
+                        }
+                        sb.toString()
+                    } else {
+                        val leadingQuantityRegex = Regex("""^\d+(?:\s+\d+/\d+|\.\d+|/\d+)?""")
+                        val match = leadingQuantityRegex.find(originalText)
+                        if (match != null) {
+                            val remainingText = originalText.substring(match.range.last + 1).trimStart()
+                            "$qtyStr $remainingText"
+                        } else {
+                            "$qtyStr $originalText"
+                        }
+                    }
+                } else {
+                    originalText
+                }
+
+                if (displayStr.isNotEmpty()) {
+                    val row = LinearLayout(this).apply {
+                        this.orientation = LinearLayout.HORIZONTAL
+                        this.setPadding(0, 6, 0, 6)
+                        this.gravity = android.view.Gravity.CENTER_VERTICAL
+                        this.isClickable = true
+                        this.isFocusable = true
+                    }
+                    
+                    val tvCheck = TextView(this).apply {
+                        this.text = "○"
+                        this.setTextColor(android.graphics.Color.parseColor("#FF9800"))
+                        this.textSize = 18f
+                        this.setPadding(0, 0, 12, 0)
+                    }
+                    
+                    val tvText = TextView(this).apply {
+                        this.text = displayStr
+                        this.setTextColor(android.graphics.Color.WHITE)
+                        this.textSize = 14f
+                        this.layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    
+                    row.addView(tvCheck)
+                    row.addView(tvText)
+                    
+                    var isChecked = false
+                    row.setOnClickListener {
+                        isChecked = !isChecked
+                        if (isChecked) {
+                            tvCheck.text = "✓"
+                            tvCheck.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
+                            tvText.paintFlags = tvText.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
+                            tvText.setTextColor(android.graphics.Color.parseColor("#66FFFFFF"))
+                        } else {
+                            tvCheck.text = "○"
+                            tvCheck.setTextColor(android.graphics.Color.parseColor("#FF9800"))
+                            tvText.paintFlags = tvText.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                            tvText.setTextColor(android.graphics.Color.WHITE)
+                        }
+                    }
+                    
+                    layoutDetailIngredients.addView(row)
                 }
             }
         }
@@ -841,26 +1021,90 @@ class DashboardActivity : AppCompatActivity() {
                 val step = instructionsArray.optJSONObject(i) ?: continue
                 val text = step.optString("text", "")
                 if (text.isNotEmpty()) {
-                    val stepContainer = LinearLayout(this).apply {
-                        this.orientation = LinearLayout.HORIZONTAL
-                        this.setPadding(0, 8, 0, 8)
-                        this.gravity = android.view.Gravity.CENTER_VERTICAL
+                    val card = LinearLayout(this).apply {
+                        this.orientation = LinearLayout.VERTICAL
+                        this.setPadding(16, 12, 16, 12)
+                        this.background = androidx.core.content.ContextCompat.getDrawable(this@DashboardActivity, R.drawable.bg_minimized_timer)
+                        val lp = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            this.setMargins(0, 0, 0, 12)
+                        }
+                        this.layoutParams = lp
                     }
 
-                    val tvStep = TextView(this).apply {
-                        this.text = "${i + 1}. $text"
+                    val header = LinearLayout(this).apply {
+                        this.orientation = LinearLayout.HORIZONTAL
+                        this.gravity = android.view.Gravity.CENTER_VERTICAL
+                        this.layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+
+                    val tvStepDone = TextView(this).apply {
+                        this.text = "○"
+                        this.setTextColor(android.graphics.Color.parseColor("#FF9800"))
+                        this.textSize = 18f
+                        this.setPadding(0, 0, 12, 0)
+                        this.isClickable = true
+                        this.isFocusable = true
+                    }
+
+                    val tvStepTitle = TextView(this).apply {
+                        this.text = "Step ${i + 1}"
                         this.setTextColor(android.graphics.Color.WHITE)
                         this.textSize = 15f
-                        this.layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                        this.setTypeface(null, android.graphics.Typeface.BOLD)
+                        this.layoutParams = LinearLayout.LayoutParams(
+                            0,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            1f
+                        )
                     }
-                    stepContainer.addView(tvStep)
+
+                    val tvStepArrow = TextView(this).apply {
+                        this.text = "▲"
+                        this.setTextColor(android.graphics.Color.GRAY)
+                        this.textSize = 14f
+                        this.setPadding(12, 0, 0, 0)
+                    }
+
+                    header.addView(tvStepDone)
+                    header.addView(tvStepTitle)
+                    header.addView(tvStepArrow)
+                    card.addView(header)
+
+                    val body = LinearLayout(this).apply {
+                        this.orientation = LinearLayout.VERTICAL
+                        this.setPadding(0, 8, 0, 0)
+                        this.layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+
+                    val tvStepText = TextView(this).apply {
+                        this.text = text
+                        this.setTextColor(android.graphics.Color.parseColor("#E0E0E0"))
+                        this.textSize = 14f
+                        this.layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        )
+                    }
+                    body.addView(tvStepText)
 
                     val timers = parseTimersFromText(text)
                     if (timers.isNotEmpty()) {
                         val timerContainer = LinearLayout(this).apply {
-                            this.orientation = LinearLayout.VERTICAL
-                            this.setPadding(12, 0, 0, 0)
-                            this.layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+                            this.orientation = LinearLayout.HORIZONTAL
+                            this.setPadding(0, 8, 0, 0)
+                            this.layoutParams = LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                LinearLayout.LayoutParams.WRAP_CONTENT
+                            )
                         }
 
                         for (seconds in timers) {
@@ -881,13 +1125,62 @@ class DashboardActivity : AppCompatActivity() {
                                 this.setOnClickListener {
                                     startNativeTimer(recipeName, "Step ${i + 1}: $text", seconds)
                                 }
+                                
+                                val blp = LinearLayout.LayoutParams(
+                                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                                    LinearLayout.LayoutParams.WRAP_CONTENT
+                                ).apply {
+                                    this.setMargins(0, 0, 12, 0)
+                                }
+                                this.layoutParams = blp
                             }
                             timerContainer.addView(btnTimer)
                         }
-                        stepContainer.addView(timerContainer)
+                        body.addView(timerContainer)
                     }
 
-                    layoutDetailInstructions.addView(stepContainer)
+                    card.addView(body)
+
+                    var isCompleted = false
+                    var isExpanded = true
+
+                    val toggleExpand = {
+                        isExpanded = !isExpanded
+                        body.visibility = if (isExpanded) android.view.View.VISIBLE else android.view.View.GONE
+                        tvStepArrow.text = if (isExpanded) "▲" else "▼"
+                    }
+
+                    tvStepDone.setOnClickListener {
+                        isCompleted = !isCompleted
+                        if (isCompleted) {
+                            tvStepDone.text = "✓"
+                            tvStepDone.setTextColor(android.graphics.Color.parseColor("#4CAF50"))
+                            tvStepTitle.paintFlags = tvStepTitle.paintFlags or android.graphics.Paint.STRIKE_THRU_TEXT_FLAG
+                            tvStepTitle.setTextColor(android.graphics.Color.parseColor("#66FFFFFF"))
+                            card.alpha = 0.5f
+                            if (isExpanded) {
+                                toggleExpand()
+                            }
+                        } else {
+                            tvStepDone.text = "○"
+                            tvStepDone.setTextColor(android.graphics.Color.parseColor("#FF9800"))
+                            tvStepTitle.paintFlags = tvStepTitle.paintFlags and android.graphics.Paint.STRIKE_THRU_TEXT_FLAG.inv()
+                            tvStepTitle.setTextColor(android.graphics.Color.WHITE)
+                            card.alpha = 1.0f
+                            if (!isExpanded) {
+                                toggleExpand()
+                            }
+                        }
+                    }
+
+                    val expandClickListener = android.view.View.OnClickListener {
+                        toggleExpand()
+                    }
+                    tvStepTitle.setOnClickListener(expandClickListener)
+                    tvStepArrow.setOnClickListener(expandClickListener)
+                    tvStepText.setOnClickListener(expandClickListener)
+
+                    layoutDetailInstructions.addView(card)
                 }
             }
         }
