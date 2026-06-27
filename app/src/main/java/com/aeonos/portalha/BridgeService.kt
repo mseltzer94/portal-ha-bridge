@@ -1074,11 +1074,7 @@ class BridgeService : Service() {
 
     private fun onPresenceChange(present: Boolean) {
         val p = prefs ?: return
-        if (present) {
-            lastActivityMs = System.currentTimeMillis()  // presence keeps the screen awake
-            ScreenControl.wake(this)
-            bringDashboardToFront()
-        }
+        if (present) lastActivityMs = System.currentTimeMillis()  // presence keeps the screen awake
         publishRaw(HaDiscovery.presenceStateTopic(p.deviceId), if (present) "ON" else "OFF", 1, retained = true)
     }
 
