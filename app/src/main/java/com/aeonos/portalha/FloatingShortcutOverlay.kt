@@ -42,8 +42,6 @@ class FloatingShortcutOverlay(
     private var view: TextView? = null
     private var params: WindowManager.LayoutParams? = null
 
-    @Volatile private var moveMode = false
-
     private var downRawX = 0f
     private var downRawY = 0f
     private var startX = 0
@@ -82,39 +80,37 @@ class FloatingShortcutOverlay(
                     y = if (savedY >= 0) savedY else dp(defaultY)
                 }
 
-                val gesture = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
-                    override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
-                        if (!moveMode) {
-                            onTap()
-                        }
-                        return true
-                    }
-                    override fun onDoubleTap(e: MotionEvent): Boolean {
-                        moveMode = !moveMode
-                        applyVisual()
-                        return true
-                    }
-                })
+                var isDragging = false
 
-                btn.setOnTouchListener { _, ev ->
-                    gesture.onTouchEvent(ev)
+                btn.setOnTouchListener { v, ev ->
                     val p = params ?: return@setOnTouchListener true
                     when (ev.actionMasked) {
                         MotionEvent.ACTION_DOWN -> {
-                            if (moveMode) {
-                                downRawX = ev.rawX; downRawY = ev.rawY; startX = p.x; startY = p.y
+                            downRawX = ev.rawX
+                            downRawY = ev.rawY
+                            startX = p.x
+                            startY = p.y
+                            isDragging = false
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            val diffX = ev.rawX - downRawX
+                            val diffY = ev.rawY - downRawY
+                            if (!isDragging && (kotlin.math.abs(diffX) > dp(8) || kotlin.math.abs(diffY) > dp(8))) {
+                                isDragging = true
+                                v.alpha = 1f // Solid while dragging
+                            }
+                            if (isDragging) {
+                                p.x = startX + diffX.toInt()
+                                p.y = startY + diffY.toInt()
+                                runCatching { wm.updateViewLayout(view, p) }
                             }
                         }
-                        MotionEvent.ACTION_MOVE -> if (moveMode) {
-                            p.x = startX + (ev.rawX - downRawX).toInt()
-                            p.y = startY + (ev.rawY - downRawY).toInt()
-                            runCatching { wm.updateViewLayout(view, p) }
-                        }
                         MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                            if (moveMode) {
+                            v.alpha = (prefs.intercomOverlayOpacity / 100f).coerceIn(0.1f, 1f) // Restore opacity
+                            if (isDragging) {
                                 prefs.sp.edit().putInt(prefsKeyX, p.x).putInt(prefsKeyY, p.y).apply()
-                                val moved = kotlin.math.abs(p.x - startX) + kotlin.math.abs(p.y - startY) > dp(6)
-                                if (moved) { moveMode = false; applyVisual() }
+                            } else {
+                                onTap()
                             }
                         }
                     }
@@ -145,17 +141,12 @@ class FloatingShortcutOverlay(
         val active = isActive()
         val chosen = if (active) activeBgColor else defaultBgColor
         
-        val (bg, alpha) = when {
-            moveMode -> Color.parseColor("#2196F3") to 1f  // blue while moving
-            else     -> chosen to idleAlpha
-        }
-        
         v.text = label()
-        v.alpha = alpha
+        v.alpha = idleAlpha
         v.background = GradientDrawable().apply {
             shape = GradientDrawable.RECTANGLE
             cornerRadius = 40 * density
-            setColor(bg)
+            setColor(chosen)
             setStroke((2 * density).toInt(), Color.parseColor("#80FFFFFF"))
         }
     }
