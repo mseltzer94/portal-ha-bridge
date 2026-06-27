@@ -52,8 +52,7 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var btnCloseOverlay: ImageButton
     private lateinit var btnReloadOverlay: ImageButton
 
-    private var massdroidOverlayView: android.view.View? = null
-    private var massdroidOverlayWindowManager: WindowManager? = null
+
 
     // Alert Overlay views
     private lateinit var alertOverlay: android.view.View
@@ -385,69 +384,10 @@ class DashboardActivity : AppCompatActivity() {
         }
         runCatching {
             startActivity(intent)
-            if (android.provider.Settings.canDrawOverlays(this)) {
-                showMassdroidReturnOverlay()
-            } else {
-                Toast.makeText(this, "Overlay permission is required for the floating return button", Toast.LENGTH_SHORT).show()
-            }
         }.onFailure { error ->
             android.util.Log.w("PortalHA", "Could not launch Massdroid: ${error.message}")
             Toast.makeText(this, "Massdroid is not available on this device", Toast.LENGTH_SHORT).show()
         }
-    }
-
-    private fun showMassdroidReturnOverlay() {
-        if (massdroidOverlayView != null) return
-        if (!android.provider.Settings.canDrawOverlays(this)) return
-
-        massdroidOverlayWindowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        val button = Button(this).apply {
-            text = "⬅ Dashboard"
-            textSize = 16f
-            setPadding(24, 14, 24, 14)
-            setTextColor(Color.WHITE)
-            setBackgroundColor(Color.parseColor("#2563EB"))
-            setOnClickListener { returnToDashboard() }
-            alpha = 0.96f
-        }
-
-        val container = android.widget.FrameLayout(this).apply {
-            addView(button, ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT)
-        }
-
-        val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                WindowManager.LayoutParams.TYPE_PHONE
-            },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT
-        ).apply {
-            gravity = Gravity.BOTTOM or Gravity.END
-            x = 0
-            y = 160
-        }
-
-        massdroidOverlayView = container
-        massdroidOverlayWindowManager?.addView(container, params)
-    }
-
-    private fun hideMassdroidReturnOverlay() {
-        val view = massdroidOverlayView ?: return
-        massdroidOverlayWindowManager?.removeView(view)
-        massdroidOverlayView = null
-        massdroidOverlayWindowManager = null
-    }
-
-    private fun returnToDashboard() {
-        hideMassdroidReturnOverlay()
-        val intent = Intent(this, DashboardActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
-        }
-        startActivity(intent)
     }
 
 
@@ -715,7 +655,6 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        hideMassdroidReturnOverlay()
         activityScope.cancel()
         nativeCountDownTimer?.cancel()
         TonePlayer.stopLooping()

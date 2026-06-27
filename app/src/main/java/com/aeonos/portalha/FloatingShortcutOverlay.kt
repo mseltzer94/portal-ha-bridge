@@ -20,16 +20,16 @@ import android.widget.TextView
 // and can be double-tapped to move/drag. Position is persisted in preferences.
 class FloatingShortcutOverlay(
     private val context: Context,
-    private val label: () -> String,
-    private val prefsKeyX: String,
-    private val prefsKeyY: String,
+    private var label: () -> String,
+    val prefsKeyX: String,
+    val prefsKeyY: String,
     private val defaultX: Int, // in dp
     private val defaultY: Int, // in dp
     private val defaultBgColor: Int,
     private val activeBgColor: Int = defaultBgColor,
     private val isActive: () -> Boolean = { true },
     private val rightAlignByDefault: Boolean = false,
-    private val onTap: () -> Unit
+    private var onTap: () -> Unit
 ) {
     companion object {
         private const val TAG = "PortalHA"
@@ -149,6 +149,12 @@ class FloatingShortcutOverlay(
             setColor(chosen)
             setStroke((2 * density).toInt(), Color.parseColor("#80FFFFFF"))
         }
+    }
+
+    fun updateLabelAndTap(newLabel: () -> String, newOnTap: () -> Unit) {
+        this.label = newLabel
+        this.onTap = newOnTap
+        refresh()
     }
 
     fun refresh() = main.post { applyVisual() }

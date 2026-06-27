@@ -1348,84 +1348,184 @@ class BridgeService : Service() {
     private fun reconcileShortcutOverlays() {
         val p = prefs ?: return
         val show = dashboardForeground
-        if (!show) { hideShortcutOverlays(); return }
-        if (shortcutOverlays.isNotEmpty()) {
-            shortcutOverlays.forEach { it.refresh() }
+
+        if (!show) {
+            shortcutOverlays.filter { it.prefsKeyX != "music_btn_x" }.forEach { it.hide() }
+            shortcutOverlays.removeAll { it.prefsKeyX != "music_btn_x" }
+
+            var musicOverlay = shortcutOverlays.find { it.prefsKeyX == "music_btn_x" }
+            if (musicOverlay == null) {
+                musicOverlay = FloatingShortcutOverlay(
+                    context = this,
+                    label = { "⬅️ Dashboard" },
+                    prefsKeyX = "music_btn_x",
+                    prefsKeyY = "music_btn_y",
+                    defaultX = 16,
+                    defaultY = 700,
+                    defaultBgColor = Color.parseColor("#2563EB"),
+                    rightAlignByDefault = true,
+                    onTap = {
+                        runCatching {
+                            val intent = Intent(this, DashboardActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                )
+                shortcutOverlays.add(musicOverlay)
+                musicOverlay.show()
+            } else {
+                musicOverlay.updateLabelAndTap(
+                    newLabel = { "⬅️ Dashboard" },
+                    newOnTap = {
+                        runCatching {
+                            val intent = Intent(this, DashboardActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                )
+            }
             return
         }
 
         // 1. Recipes Button (Bottom Left)
-        FloatingShortcutOverlay(
-            context = this,
-            label = { "🍽️ Recipes" },
-            prefsKeyX = "recipes_btn_x",
-            prefsKeyY = "recipes_btn_y",
-            defaultX = 16,
-            defaultY = 700,
-            defaultBgColor = Color.parseColor("#F59E0B"),
-            rightAlignByDefault = false,
-            onTap = {
-                runCatching {
-                    val intent = Intent(this, DashboardActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                        putExtra("action", "open_recipes")
+        var recipesOverlay = shortcutOverlays.find { it.prefsKeyX == "recipes_btn_x" }
+        if (recipesOverlay == null) {
+            recipesOverlay = FloatingShortcutOverlay(
+                context = this,
+                label = { "🍽️ Recipes" },
+                prefsKeyX = "recipes_btn_x",
+                prefsKeyY = "recipes_btn_y",
+                defaultX = 16,
+                defaultY = 700,
+                defaultBgColor = Color.parseColor("#F59E0B"),
+                rightAlignByDefault = false,
+                onTap = {
+                    runCatching {
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra("action", "open_recipes")
+                        }
+                        startActivity(intent)
                     }
-                    startActivity(intent)
                 }
-            }
-        ).also { shortcutOverlays.add(it); it.show() }
+            )
+            shortcutOverlays.add(recipesOverlay)
+            recipesOverlay.show()
+        } else {
+            recipesOverlay.updateLabelAndTap(
+                newLabel = { "🍽️ Recipes" },
+                newOnTap = {
+                    runCatching {
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra("action", "open_recipes")
+                        }
+                        startActivity(intent)
+                    }
+                }
+            )
+        }
 
         // 2. Music Button (Bottom Right)
-        FloatingShortcutOverlay(
-            context = this,
-            label = { "🎵 Music" },
-            prefsKeyX = "music_btn_x",
-            prefsKeyY = "music_btn_y",
-            defaultX = 16,
-            defaultY = 700,
-            defaultBgColor = Color.parseColor("#2563EB"),
-            rightAlignByDefault = true,
-            onTap = {
-                runCatching {
-                    val intent = Intent(this, DashboardActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                        putExtra("action", "open_music")
+        var musicOverlay = shortcutOverlays.find { it.prefsKeyX == "music_btn_x" }
+        if (musicOverlay == null) {
+            musicOverlay = FloatingShortcutOverlay(
+                context = this,
+                label = { "🎵 Music" },
+                prefsKeyX = "music_btn_x",
+                prefsKeyY = "music_btn_y",
+                defaultX = 16,
+                defaultY = 700,
+                defaultBgColor = Color.parseColor("#2563EB"),
+                rightAlignByDefault = true,
+                onTap = {
+                    runCatching {
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra("action", "open_music")
+                        }
+                        startActivity(intent)
                     }
-                    startActivity(intent)
                 }
-            }
-        ).also { shortcutOverlays.add(it); it.show() }
+            )
+            shortcutOverlays.add(musicOverlay)
+            musicOverlay.show()
+        } else {
+            musicOverlay.updateLabelAndTap(
+                newLabel = { "🎵 Music" },
+                newOnTap = {
+                    runCatching {
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            putExtra("action", "open_music")
+                        }
+                        startActivity(intent)
+                    }
+                }
+            )
+        }
 
         // 3. Camera Toggle Button (Left Edge, middle area, only if stream URL is populated)
         val populatedUrl = p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF"
         val lastPopulatedUrl = p.lastDisplayRtspUrl.isNotEmpty()
         val defaultPopulatedUrl = p.defaultRtspUrl.isNotEmpty()
         if (populatedUrl || lastPopulatedUrl || defaultPopulatedUrl) {
-            FloatingShortcutOverlay(
-                context = this,
-                label = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
-                prefsKeyX = "camera_btn_x",
-                prefsKeyY = "camera_btn_y",
-                defaultX = 16,
-                defaultY = 550,
-                defaultBgColor = Color.parseColor("#424242"),
-                activeBgColor = Color.parseColor("#4CAF50"),
-                isActive = { p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF" },
-                rightAlignByDefault = false,
-                onTap = {
-                    val current = p.displayRtspUrl
-                    if (current.isNotEmpty() && current.uppercase() != "OFF") {
-                        p.lastDisplayRtspUrl = current
-                        setDisplayRtsp(this, "OFF")
-                    } else {
-                        val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
-                        if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
-                            setDisplayRtsp(this, targetUrl)
+            var cameraOverlay = shortcutOverlays.find { it.prefsKeyX == "camera_btn_x" }
+            if (cameraOverlay == null) {
+                cameraOverlay = FloatingShortcutOverlay(
+                    context = this,
+                    label = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
+                    prefsKeyX = "camera_btn_x",
+                    prefsKeyY = "camera_btn_y",
+                    defaultX = 16,
+                    defaultY = 550,
+                    defaultBgColor = Color.parseColor("#424242"),
+                    activeBgColor = Color.parseColor("#4CAF50"),
+                    isActive = { p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF" },
+                    rightAlignByDefault = false,
+                    onTap = {
+                        val current = p.displayRtspUrl
+                        if (current.isNotEmpty() && current.uppercase() != "OFF") {
+                            p.lastDisplayRtspUrl = current
+                            setDisplayRtsp(this, "OFF")
+                        } else {
+                            val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
+                            if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
+                                setDisplayRtsp(this, targetUrl)
+                            }
                         }
+                        mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
                     }
-                    mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
-                }
-            ).also { shortcutOverlays.add(it); it.show() }
+                )
+                shortcutOverlays.add(cameraOverlay)
+                cameraOverlay.show()
+            } else {
+                cameraOverlay.updateLabelAndTap(
+                    newLabel = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
+                    newOnTap = {
+                        val current = p.displayRtspUrl
+                        if (current.isNotEmpty() && current.uppercase() != "OFF") {
+                            p.lastDisplayRtspUrl = current
+                            setDisplayRtsp(this, "OFF")
+                        } else {
+                            val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
+                            if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
+                                setDisplayRtsp(this, targetUrl)
+                            }
+                        }
+                        mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
+                    }
+                )
+            }
+        } else {
+            shortcutOverlays.find { it.prefsKeyX == "camera_btn_x" }?.let {
+                it.hide()
+                shortcutOverlays.remove(it)
+            }
         }
     }
 
