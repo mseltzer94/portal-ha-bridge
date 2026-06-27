@@ -307,6 +307,7 @@ class DashboardActivity : AppCompatActivity() {
 
         val btnToggleCamera = findViewById<android.view.View>(R.id.btn_toggle_camera)
         val btnOpenRecipes = findViewById<android.view.View>(R.id.btn_open_recipes)
+        val btnOpenMusic = findViewById<android.view.View>(R.id.btn_open_music)
 
         btnToggleCamera.setOnClickListener {
             val current = prefs.displayRtspUrl
@@ -326,6 +327,10 @@ class DashboardActivity : AppCompatActivity() {
 
         btnOpenRecipes.setOnClickListener {
             toggleRecipesSidebar()
+        }
+
+        btnOpenMusic.setOnClickListener {
+            launchMassdroid()
         }
 
         updateCameraBtnVisual()
