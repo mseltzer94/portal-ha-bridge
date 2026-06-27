@@ -214,14 +214,9 @@ class DashboardActivity : AppCompatActivity() {
             override fun onDrawerOpened(drawerView: android.view.View) {
                 if (drawerView == rightDrawer) {
                     loadRecipes()
-                    BridgeService.setRecipesOpen(true)
                 }
             }
-            override fun onDrawerClosed(drawerView: android.view.View) {
-                if (drawerView == rightDrawer) {
-                    BridgeService.setRecipesOpen(false)
-                }
-            }
+            override fun onDrawerClosed(drawerView: android.view.View) {}
             override fun onDrawerStateChanged(newState: Int) {}
         })
 
@@ -310,6 +305,31 @@ class DashboardActivity : AppCompatActivity() {
             loadDashboard()
         }
 
+        val btnToggleCamera = findViewById<android.view.View>(R.id.btn_toggle_camera)
+        val btnOpenRecipes = findViewById<android.view.View>(R.id.btn_open_recipes)
+
+        btnToggleCamera.setOnClickListener {
+            val current = prefs.displayRtspUrl
+            if (current.isNotEmpty() && current.uppercase() != "OFF") {
+                prefs.lastDisplayRtspUrl = current
+                BridgeService.setDisplayRtsp(this, "OFF")
+            } else {
+                val targetUrl = prefs.lastDisplayRtspUrl.ifEmpty { prefs.defaultRtspUrl.ifEmpty { current } }
+                if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
+                    BridgeService.setDisplayRtsp(this, targetUrl)
+                } else {
+                    android.widget.Toast.makeText(this, "RTSP Camera URL is not configured", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            updateCameraBtnVisual()
+        }
+
+        btnOpenRecipes.setOnClickListener {
+            toggleRecipesSidebar()
+        }
+
+        updateCameraBtnVisual()
+
         setupIntercom()
 
         loadDashboard()
@@ -388,6 +408,7 @@ class DashboardActivity : AppCompatActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         runCatching {
+            BridgeService.setMassdroidActive(true)
             startActivity(intent)
         }.onFailure { error ->
             android.util.Log.w("PortalHA", "Could not launch Massdroid: ${error.message}")
@@ -457,14 +478,13 @@ class DashboardActivity : AppCompatActivity() {
         dismissKeyguard()
         when {
             alertOverlay.visibility == android.view.View.VISIBLE -> alertOverlay.requestFocus()
-            overlayWebView.visibility == android.view.View.VISIBLE -> overlayWebView.requestFocus()
             else -> webView.requestFocus()
         }
         // Floating talk buttons are shown only while the dashboard is in front.
         BridgeService.setDashboardForeground(true)
-        // Re-acquire the camera if another app (e.g. the Portal launcher) took
-        // it while we were in the background.
+        BridgeService.setMassdroidActive(false)
         BridgeService.ensureCamera(this)
+        updateCameraBtnVisual()
         // Reload if URL changed in settings
         val url = prefs.haUrl
         val current = webView.url ?: ""
@@ -901,6 +921,7 @@ class DashboardActivity : AppCompatActivity() {
 
         player = newPlayer
         playerView.player = newPlayer
+        updateCameraBtnVisual()
     }
 
     private fun toggleRecipesSidebar() {
@@ -1515,5 +1536,17 @@ class DashboardActivity : AppCompatActivity() {
         player = null
         playerView.player = null
         playerView.visibility = android.view.View.GONE
+        updateCameraBtnVisual()
+    }
+
+    private fun updateCameraBtnVisual() {
+        val btnToggleCamera = findViewById<android.view.View>(R.id.btn_toggle_camera) ?: return
+        val current = prefs.displayRtspUrl
+        val active = current.isNotEmpty() && current.uppercase() != "OFF"
+        if (active) {
+            btnToggleCamera.setBackgroundColor(Color.parseColor("#4CAF50")) // Green
+        } else {
+            btnToggleCamera.setBackgroundColor(Color.parseColor("#424242")) // Gray
+        }
     }
 }

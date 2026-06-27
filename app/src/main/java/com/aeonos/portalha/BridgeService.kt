@@ -77,22 +77,17 @@ class BridgeService : Service() {
         // Repaint the floating buttons live (e.g. the transparency slider moved).
         fun intercomOverlayRefresh() { instance?.intercomOverlays?.forEach { it.refresh() } }
 
-        // The dashboard drives overlay visibility — the floating buttons show only
-        // while the Portal HA Bridge dashboard is in front, not over other apps.
-        private val shortcutOverlays = java.util.concurrent.CopyOnWriteArrayList<FloatingShortcutOverlay>()
-        @Volatile var recipesOpen = false
-            private set
-
-        fun setRecipesOpen(open: Boolean) {
-            recipesOpen = open
-            instance?.reconcileShortcutOverlays()
-        }
-
         @Volatile private var dashboardForeground = false
         fun setDashboardForeground(fg: Boolean) {
             dashboardForeground = fg
             instance?.reconcileIntercomOverlays()
-            instance?.reconcileShortcutOverlays()
+            instance?.reconcileMusicOverlay()
+        }
+
+        @Volatile private var massdroidActive = false
+        fun setMassdroidActive(active: Boolean) {
+            massdroidActive = active
+            instance?.reconcileMusicOverlay()
         }
 
         fun start(context: Context) =
@@ -176,6 +171,7 @@ class BridgeService : Service() {
     // Portal-to-Portal intercom (audio-only push-to-announce) + optional overlays.
     private var intercom: Intercom? = null
     private val intercomOverlays = mutableListOf<IntercomOverlay>()
+    private var musicOverlay: FloatingShortcutOverlay? = null
     @Volatile private var lastVolumePercent = -1
     @Volatile private var lastVolumeMuted = false
     @Volatile private var lastBrightnessPercent = -1
@@ -437,7 +433,7 @@ class BridgeService : Service() {
         soundMonitor?.stop()
         intercom?.release()
         hideIntercomOverlays()
-        hideShortcutOverlays()
+        hideMusicOverlay()
         instance = null
         cameraStream?.release()
         rtspStreamer?.stop()
@@ -499,7 +495,9 @@ class BridgeService : Service() {
     // SYSTEM_ALERT_WINDOW permission exempts this from background-start limits.
     // DashboardActivity is singleTask, so this reuses the existing instance.
     private fun reclaimForeground() {
-        bringDashboardToFront()
+        if (!dashboardForeground) {
+            bringDashboardToFront()
+        }
     }
 
     private fun bringDashboardToFront() {
@@ -1097,7 +1095,6 @@ class BridgeService : Service() {
                 startActivity(intent)
                 Log.i(TAG, "handleDisplayRtspCommand: started DashboardActivity with url extra")
             }.onFailure { Log.w(TAG, "failed to start DashboardActivity for RTSP: ${it.message}") }
-            reconcileShortcutOverlays()
         }
     }
 
@@ -1319,6 +1316,41 @@ class BridgeService : Service() {
     // Show the configured talk buttons only while: the feature is on, this Portal
     // can transmit (not receive-only), AND the dashboard is in front. Otherwise
     // hide them — they don't float over other apps / the home screen.
+    private fun reconcileMusicOverlay() {
+        // Show a floating "🎵 Music" button whenever Massdroid is the active app,
+        // so the user can tap it to return to the dashboard.
+        if (massdroidActive && !dashboardForeground) {
+            if (musicOverlay != null) return  // already showing
+            if (!android.provider.Settings.canDrawOverlays(this)) return
+            musicOverlay = FloatingShortcutOverlay(
+                context = this,
+                label = { "🎵 Music" },
+                prefsKeyX = "music_btn_x",
+                prefsKeyY = "music_btn_y",
+                defaultX = 16,
+                defaultY = 680,
+                defaultBgColor = Color.parseColor("#2563EB"),
+                rightAlignByDefault = false,
+                onTap = {
+                    runCatching {
+                        val intent = Intent(this, DashboardActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        }
+                        startActivity(intent)
+                    }
+                }
+            )
+            musicOverlay?.show()
+        } else {
+            hideMusicOverlay()
+        }
+    }
+
+    private fun hideMusicOverlay() {
+        musicOverlay?.hide()
+        musicOverlay = null
+    }
+
     private fun reconcileIntercomOverlays() {
         val p = prefs ?: return
         val show = p.intercomOverlayEnabled && intercom?.canTransmit() == true && dashboardForeground
@@ -1353,238 +1385,7 @@ class BridgeService : Service() {
         intercomOverlays.clear()
     }
 
-    private fun reconcileShortcutOverlays() {
-        val p = prefs ?: return
-        val show = dashboardForeground
 
-        if (!show) {
-            shortcutOverlays.filter { it.prefsKeyX != "music_btn_x" }.forEach { it.hide() }
-            shortcutOverlays.removeAll { it.prefsKeyX != "music_btn_x" }
-
-            var musicOverlay = shortcutOverlays.find { it.prefsKeyX == "music_btn_x" }
-            if (musicOverlay == null) {
-                musicOverlay = FloatingShortcutOverlay(
-                    context = this,
-                    label = { "⬅️ Dashboard" },
-                    prefsKeyX = "music_btn_x",
-                    prefsKeyY = "music_btn_y",
-                    defaultX = 16,
-                    defaultY = 700,
-                    defaultBgColor = Color.parseColor("#2563EB"),
-                    rightAlignByDefault = true,
-                    onTap = {
-                        runCatching {
-                            val intent = Intent(this, DashboardActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                )
-                shortcutOverlays.add(musicOverlay)
-                musicOverlay.show()
-            } else {
-                musicOverlay.updateLabelAndTap(
-                    newLabel = { "⬅️ Dashboard" },
-                    newOnTap = {
-                        runCatching {
-                            val intent = Intent(this, DashboardActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                )
-            }
-            return
-        }
-
-        if (recipesOpen) {
-            shortcutOverlays.filter { it.prefsKeyX != "recipes_btn_x" }.forEach { it.hide() }
-            shortcutOverlays.removeAll { it.prefsKeyX != "recipes_btn_x" }
-
-            var recipesOverlay = shortcutOverlays.find { it.prefsKeyX == "recipes_btn_x" }
-            if (recipesOverlay == null) {
-                recipesOverlay = FloatingShortcutOverlay(
-                    context = this,
-                    label = { "⬅️ Dashboard" },
-                    prefsKeyX = "recipes_btn_x",
-                    prefsKeyY = "recipes_btn_y",
-                    defaultX = 16,
-                    defaultY = 700,
-                    defaultBgColor = Color.parseColor("#F59E0B"),
-                    rightAlignByDefault = false,
-                    onTap = {
-                        runCatching {
-                            val intent = Intent(this, DashboardActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                putExtra("action", "open_recipes")
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                )
-                shortcutOverlays.add(recipesOverlay)
-                recipesOverlay.show()
-            } else {
-                recipesOverlay.updateLabelAndTap(
-                    newLabel = { "⬅️ Dashboard" },
-                    newOnTap = {
-                        runCatching {
-                            val intent = Intent(this, DashboardActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                putExtra("action", "open_recipes")
-                            }
-                            startActivity(intent)
-                        }
-                    }
-                )
-            }
-            return
-        }
-
-        // 1. Recipes Button (Bottom Left)
-        var recipesOverlay = shortcutOverlays.find { it.prefsKeyX == "recipes_btn_x" }
-        if (recipesOverlay == null) {
-            recipesOverlay = FloatingShortcutOverlay(
-                context = this,
-                label = { "🍽️ Recipes" },
-                prefsKeyX = "recipes_btn_x",
-                prefsKeyY = "recipes_btn_y",
-                defaultX = 16,
-                defaultY = 700,
-                defaultBgColor = Color.parseColor("#F59E0B"),
-                rightAlignByDefault = false,
-                onTap = {
-                    runCatching {
-                        val intent = Intent(this, DashboardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra("action", "open_recipes")
-                        }
-                        startActivity(intent)
-                    }
-                }
-            )
-            shortcutOverlays.add(recipesOverlay)
-            recipesOverlay.show()
-        } else {
-            recipesOverlay.updateLabelAndTap(
-                newLabel = { "🍽️ Recipes" },
-                newOnTap = {
-                    runCatching {
-                        val intent = Intent(this, DashboardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra("action", "open_recipes")
-                        }
-                        startActivity(intent)
-                    }
-                }
-            )
-        }
-
-        // 2. Music Button (Bottom Right)
-        var musicOverlay = shortcutOverlays.find { it.prefsKeyX == "music_btn_x" }
-        if (musicOverlay == null) {
-            musicOverlay = FloatingShortcutOverlay(
-                context = this,
-                label = { "🎵 Music" },
-                prefsKeyX = "music_btn_x",
-                prefsKeyY = "music_btn_y",
-                defaultX = 16,
-                defaultY = 700,
-                defaultBgColor = Color.parseColor("#2563EB"),
-                rightAlignByDefault = true,
-                onTap = {
-                    runCatching {
-                        val intent = Intent(this, DashboardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra("action", "open_music")
-                        }
-                        startActivity(intent)
-                    }
-                }
-            )
-            shortcutOverlays.add(musicOverlay)
-            musicOverlay.show()
-        } else {
-            musicOverlay.updateLabelAndTap(
-                newLabel = { "🎵 Music" },
-                newOnTap = {
-                    runCatching {
-                        val intent = Intent(this, DashboardActivity::class.java).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                            putExtra("action", "open_music")
-                        }
-                        startActivity(intent)
-                    }
-                }
-            )
-        }
-
-        // 3. Camera Toggle Button (Left Edge, middle area, only if stream URL is populated)
-        val populatedUrl = p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF"
-        val lastPopulatedUrl = p.lastDisplayRtspUrl.isNotEmpty()
-        val defaultPopulatedUrl = p.defaultRtspUrl.isNotEmpty()
-        if (populatedUrl || lastPopulatedUrl || defaultPopulatedUrl) {
-            var cameraOverlay = shortcutOverlays.find { it.prefsKeyX == "camera_btn_x" }
-            if (cameraOverlay == null) {
-                cameraOverlay = FloatingShortcutOverlay(
-                    context = this,
-                    label = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
-                    prefsKeyX = "camera_btn_x",
-                    prefsKeyY = "camera_btn_y",
-                    defaultX = 16,
-                    defaultY = 550,
-                    defaultBgColor = Color.parseColor("#424242"),
-                    activeBgColor = Color.parseColor("#4CAF50"),
-                    isActive = { p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF" },
-                    rightAlignByDefault = false,
-                    onTap = {
-                        val current = p.displayRtspUrl
-                        if (current.isNotEmpty() && current.uppercase() != "OFF") {
-                            p.lastDisplayRtspUrl = current
-                            setDisplayRtsp(this, "OFF")
-                        } else {
-                            val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
-                            if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
-                                setDisplayRtsp(this, targetUrl)
-                            }
-                        }
-                        mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
-                    }
-                )
-                shortcutOverlays.add(cameraOverlay)
-                cameraOverlay.show()
-            } else {
-                cameraOverlay.updateLabelAndTap(
-                    newLabel = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
-                    newOnTap = {
-                        val current = p.displayRtspUrl
-                        if (current.isNotEmpty() && current.uppercase() != "OFF") {
-                            p.lastDisplayRtspUrl = current
-                            setDisplayRtsp(this, "OFF")
-                        } else {
-                            val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
-                            if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
-                                setDisplayRtsp(this, targetUrl)
-                            }
-                        }
-                        mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
-                    }
-                )
-            }
-        } else {
-            shortcutOverlays.find { it.prefsKeyX == "camera_btn_x" }?.let {
-                it.hide()
-                shortcutOverlays.remove(it)
-            }
-        }
-    }
-
-    private fun hideShortcutOverlays() {
-        shortcutOverlays.forEach { it.hide() }
-        shortcutOverlays.clear()
-    }
 
     private fun retained(payload: String) =
         MqttMessage(payload.toByteArray()).also { it.qos = 1; it.isRetained = true }
