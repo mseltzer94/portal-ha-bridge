@@ -20,11 +20,16 @@
 #     ./provision.sh --apk /path/app.apk   # install a specific APK
 #     ./provision.sh --serial 821..        # target a specific device (when several are connected)
 #     ./provision.sh --set-launcher        # also set immortal as the default home launcher
+#     ./provision.sh --restore-prefs       # push portal_ha_backup.xml from next to this script
+#     ./provision.sh --massdroid           # also install massdroid.apk from next to this script
 #
 # The APK is resolved from, in order: --apk; the build output
 # (app/build/outputs/apk/release/app-release.apk); a portal-ha-bridge.apk /
 # app-release.apk next to this script; otherwise the latest GitHub release APK
 # is downloaded automatically.
+#
+# After a factory reset / test-harness wipe, run:
+#     ./provision.sh --install --restore-prefs --massdroid --set-launcher
 
 PKG="com.aeonos.portalha"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -37,15 +42,17 @@ else
   C_CYAN=""; C_GREEN=""; C_RED=""; C_YEL=""; C_GREY=""; C_OFF=""
 fi
 
-SERIAL=""; APK=""; FORCE_INSTALL=0; SET_LAUNCHER=0
+SERIAL=""; APK=""; FORCE_INSTALL=0; SET_LAUNCHER=0; RESTORE_PREFS=0; INSTALL_MASSDROID=0
 while [ $# -gt 0 ]; do
   case "$1" in
-    --install)      FORCE_INSTALL=1 ;;
-    --set-launcher) SET_LAUNCHER=1 ;;
-    --serial)       SERIAL="$2"; shift ;;
-    --apk)          APK="$2"; shift ;;
-    -h|--help)      sed -n '3,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    *)              printf "%sUnknown argument: %s%s\n" "$C_RED" "$1" "$C_OFF"; exit 1 ;;
+    --install)        FORCE_INSTALL=1 ;;
+    --set-launcher)   SET_LAUNCHER=1 ;;
+    --restore-prefs)  RESTORE_PREFS=1 ;;
+    --massdroid)      INSTALL_MASSDROID=1 ;;
+    --serial)         SERIAL="$2"; shift ;;
+    --apk)            APK="$2"; shift ;;
+    -h|--help)        sed -n '3,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *)                printf "%sUnknown argument: %s%s\n" "$C_RED" "$1" "$C_OFF"; exit 1 ;;
   esac
   shift
 done
@@ -133,12 +140,43 @@ adb_cmd shell appops set "$PKG" WRITE_SETTINGS allow         # read/set screen b
 adb_cmd shell appops set "$PKG" SYSTEM_ALERT_WINDOW allow    # overlay -> background camera access
 printf "%s  set WRITE_SETTINGS + SYSTEM_ALERT_WINDOW = allow%s\n" "$C_GREEN" "$C_OFF"
 
+# ── System settings ───────────────────────────────────────────────────────────
+adb_cmd shell settings put global ntp_server 192.168.10.97
+printf "%s  NTP server -> 192.168.10.97%s\n" "$C_GREEN" "$C_OFF"
+
 if [ "$SET_LAUNCHER" -eq 1 ]; then
   if adb_cmd shell pm list packages com.immortal.launcher 2>/dev/null | grep -q com.immortal.launcher; then
     adb_cmd shell cmd package set-home-activity com.immortal.launcher/com.immortal.launcher.HomeActivity >/dev/null 2>&1
     printf "%s  set default home -> immortal launcher%s\n" "$C_GREEN" "$C_OFF"
   else
     printf "%s  immortal launcher not installed - skipping launcher step%s\n" "$C_YEL" "$C_OFF"
+  fi
+fi
+
+# ── Install Massdroid ────────────────────────────────────────────────────────
+if [ "$INSTALL_MASSDROID" -eq 1 ]; then
+  massdroid_apk="$SCRIPT_DIR/massdroid.apk"
+  if [ -f "$massdroid_apk" ]; then
+    printf "%sInstalling Massdroid...%s\n" "$C_CYAN" "$C_OFF"
+    adb_cmd install -r "$massdroid_apk"
+    printf "%s  Massdroid installed.%s\n" "$C_GREEN" "$C_OFF"
+  else
+    printf "%s  massdroid.apk not found next to provision.sh - skipping%s\n" "$C_YEL" "$C_OFF"
+  fi
+fi
+
+# ── Restore saved preferences ────────────────────────────────────────────────
+if [ "$RESTORE_PREFS" -eq 1 ]; then
+  prefs_src="$SCRIPT_DIR/portal_ha_backup.xml"
+  if [ -f "$prefs_src" ]; then
+    printf "%sRestoring saved preferences...%s\n" "$C_CYAN" "$C_OFF"
+    adb_cmd push "$prefs_src" /sdcard/portal_ha_restore.xml
+    adb_cmd shell run-as "$PKG" sh -c \
+      'mkdir -p shared_prefs && cp /sdcard/portal_ha_restore.xml shared_prefs/portal_ha.xml'
+    adb_cmd shell rm /sdcard/portal_ha_restore.xml
+    printf "%s  preferences restored.%s\n" "$C_GREEN" "$C_OFF"
+  else
+    printf "%s  portal_ha_backup.xml not found next to provision.sh - skipping%s\n" "$C_YEL" "$C_OFF"
   fi
 fi
 
