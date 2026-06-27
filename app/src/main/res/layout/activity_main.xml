@@ -165,6 +165,23 @@
             android:hint="Mealie API Token"
             android:inputType="text"
             android:textColor="@color/onSurface"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Display RTSP Camera"
+            android:textSize="14sp"
+            android:textColor="@color/colorAccent"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/et_display_rtsp_url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Display RTSP Stream URL (e.g. rtsp://...)"
+            android:inputType="textUri"
+            android:textColor="@color/onSurface"
             android:layout_marginBottom="16dp" />
 
 

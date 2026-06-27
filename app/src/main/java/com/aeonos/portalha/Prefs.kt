@@ -250,6 +250,10 @@ class Prefs(private val context: Context) {
         get() = sp.getString("last_display_rtsp_url", "") ?: ""
         set(v) = sp.edit().putString("last_display_rtsp_url", v).apply()
 
+    var defaultRtspUrl: String
+        get() = sp.getString("default_display_rtsp_url", "") ?: ""
+        set(v) = sp.edit().putString("default_display_rtsp_url", v).apply()
+
     var cameraButtonX: Int
         get() = sp.getInt("camera_btn_x", -1)
         set(v) = sp.edit().putInt("camera_btn_x", v).apply()

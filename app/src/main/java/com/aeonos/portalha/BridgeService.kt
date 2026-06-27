@@ -1393,7 +1393,8 @@ class BridgeService : Service() {
         // 3. Camera Toggle Button (Left Edge, middle area, only if stream URL is populated)
         val populatedUrl = p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF"
         val lastPopulatedUrl = p.lastDisplayRtspUrl.isNotEmpty()
-        if (populatedUrl || lastPopulatedUrl) {
+        val defaultPopulatedUrl = p.defaultRtspUrl.isNotEmpty()
+        if (populatedUrl || lastPopulatedUrl || defaultPopulatedUrl) {
             FloatingShortcutOverlay(
                 context = this,
                 label = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
@@ -1411,7 +1412,7 @@ class BridgeService : Service() {
                         p.lastDisplayRtspUrl = current
                         setDisplayRtsp(this, "OFF")
                     } else {
-                        val targetUrl = p.lastDisplayRtspUrl.ifEmpty { current }
+                        val targetUrl = p.lastDisplayRtspUrl.ifEmpty { p.defaultRtspUrl.ifEmpty { current } }
                         if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
                             setDisplayRtsp(this, targetUrl)
                         }

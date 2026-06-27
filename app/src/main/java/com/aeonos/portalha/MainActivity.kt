@@ -30,8 +30,10 @@ class MainActivity : AppCompatActivity() {
 
         val etMealieUrl = findViewById<EditText>(R.id.et_mealie_url)
         val etMealieToken = findViewById<EditText>(R.id.et_mealie_token)
+        val etDisplayRtspUrl = findViewById<EditText>(R.id.et_display_rtsp_url)
         etMealieUrl.setText(prefs.mealieUrl)
         etMealieToken.setText(prefs.mealieToken)
+        etDisplayRtspUrl.setText(prefs.defaultRtspUrl)
 
         // Back to the dashboard (MainActivity is always opened from it)
         findViewById<Button>(R.id.btn_back).setOnClickListener { finish() }
@@ -97,6 +99,7 @@ class MainActivity : AppCompatActivity() {
             prefs.haUrl = etHaUrl.text.toString().trim()
             prefs.mealieUrl = etMealieUrl.text.toString().trim()
             prefs.mealieToken = etMealieToken.text.toString().trim()
+            prefs.defaultRtspUrl = etDisplayRtspUrl.text.toString().trim()
             BridgeService.stop(this)
             BridgeService.start(this)
             updateStatus()
