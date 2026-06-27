@@ -1065,6 +1065,9 @@ class BridgeService : Service() {
         val url = payload.trim()
         if (url.isNotEmpty() && url.uppercase() != "OFF") {
             p.lastDisplayRtspUrl = url
+            if (p.defaultRtspUrl.isEmpty()) {
+                p.defaultRtspUrl = url
+            }
         }
         p.displayRtspUrl = url
         publishRaw(HaDiscovery.displayRtspStateTopic(p.deviceId), url, 1, retained = true)
