@@ -214,9 +214,14 @@ class DashboardActivity : AppCompatActivity() {
             override fun onDrawerOpened(drawerView: android.view.View) {
                 if (drawerView == rightDrawer) {
                     loadRecipes()
+                    BridgeService.setRecipesOpen(true)
                 }
             }
-            override fun onDrawerClosed(drawerView: android.view.View) {}
+            override fun onDrawerClosed(drawerView: android.view.View) {
+                if (drawerView == rightDrawer) {
+                    BridgeService.setRecipesOpen(false)
+                }
+            }
             override fun onDrawerStateChanged(newState: Int) {}
         })
 
@@ -665,7 +670,7 @@ class DashboardActivity : AppCompatActivity() {
     private fun handleIntent(intent: Intent?) {
         val action = intent?.getStringExtra("action")
         if (action == "open_recipes") {
-            openRecipesSidebar()
+            toggleRecipesSidebar()
         } else if (action == "open_music") {
             launchMassdroid()
         }
@@ -896,6 +901,15 @@ class DashboardActivity : AppCompatActivity() {
 
         player = newPlayer
         playerView.player = newPlayer
+    }
+
+    private fun toggleRecipesSidebar() {
+        if (drawer.isDrawerOpen(GravityCompat.END)) {
+            drawer.closeDrawer(GravityCompat.END)
+        } else {
+            drawer.openDrawer(GravityCompat.END)
+            loadRecipes()
+        }
     }
 
     private fun openRecipesSidebar() {

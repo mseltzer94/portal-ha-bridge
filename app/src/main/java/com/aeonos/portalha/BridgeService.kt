@@ -79,6 +79,15 @@ class BridgeService : Service() {
 
         // The dashboard drives overlay visibility — the floating buttons show only
         // while the Portal HA Bridge dashboard is in front, not over other apps.
+        private val shortcutOverlays = java.util.concurrent.CopyOnWriteArrayList<FloatingShortcutOverlay>()
+        @Volatile var recipesOpen = false
+            private set
+
+        fun setRecipesOpen(open: Boolean) {
+            recipesOpen = open
+            instance?.reconcileShortcutOverlays()
+        }
+
         @Volatile private var dashboardForeground = false
         fun setDashboardForeground(fg: Boolean) {
             dashboardForeground = fg
@@ -167,7 +176,6 @@ class BridgeService : Service() {
     // Portal-to-Portal intercom (audio-only push-to-announce) + optional overlays.
     private var intercom: Intercom? = null
     private val intercomOverlays = mutableListOf<IntercomOverlay>()
-    private val shortcutOverlays = mutableListOf<FloatingShortcutOverlay>()
     @Volatile private var lastVolumePercent = -1
     @Volatile private var lastVolumeMuted = false
     @Volatile private var lastBrightnessPercent = -1
@@ -1382,6 +1390,50 @@ class BridgeService : Service() {
                         runCatching {
                             val intent = Intent(this, DashboardActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                )
+            }
+            return
+        }
+
+        if (recipesOpen) {
+            shortcutOverlays.filter { it.prefsKeyX != "recipes_btn_x" }.forEach { it.hide() }
+            shortcutOverlays.removeAll { it.prefsKeyX != "recipes_btn_x" }
+
+            var recipesOverlay = shortcutOverlays.find { it.prefsKeyX == "recipes_btn_x" }
+            if (recipesOverlay == null) {
+                recipesOverlay = FloatingShortcutOverlay(
+                    context = this,
+                    label = { "⬅️ Dashboard" },
+                    prefsKeyX = "recipes_btn_x",
+                    prefsKeyY = "recipes_btn_y",
+                    defaultX = 16,
+                    defaultY = 700,
+                    defaultBgColor = Color.parseColor("#F59E0B"),
+                    rightAlignByDefault = false,
+                    onTap = {
+                        runCatching {
+                            val intent = Intent(this, DashboardActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                putExtra("action", "open_recipes")
+                            }
+                            startActivity(intent)
+                        }
+                    }
+                )
+                shortcutOverlays.add(recipesOverlay)
+                recipesOverlay.show()
+            } else {
+                recipesOverlay.updateLabelAndTap(
+                    newLabel = { "⬅️ Dashboard" },
+                    newOnTap = {
+                        runCatching {
+                            val intent = Intent(this, DashboardActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                putExtra("action", "open_recipes")
                             }
                             startActivity(intent)
                         }
