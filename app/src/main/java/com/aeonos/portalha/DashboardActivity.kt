@@ -51,8 +51,7 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var overlayWebView: WebView
     private lateinit var btnCloseOverlay: ImageButton
     private lateinit var btnReloadOverlay: ImageButton
-    private lateinit var btnOpenRecipes: android.view.View
-    private lateinit var btnOpenMassdroid: android.view.View
+
     private var massdroidOverlayView: android.view.View? = null
     private var massdroidOverlayWindowManager: WindowManager? = null
 
@@ -316,8 +315,7 @@ class DashboardActivity : AppCompatActivity() {
         overlayWebView = findViewById(R.id.overlay_web_view)
         btnCloseOverlay = findViewById(R.id.btn_close_overlay)
         btnReloadOverlay = findViewById(R.id.btn_reload_overlay)
-        btnOpenRecipes = findViewById(R.id.btn_open_recipes)
-        btnOpenMassdroid = findViewById(R.id.btn_open_massdroid)
+
 
         overlayWebView.settings.apply {
             javaScriptEnabled = true
@@ -351,13 +349,6 @@ class DashboardActivity : AppCompatActivity() {
             overlayWebView.reload()
         }
 
-        btnOpenRecipes.setOnClickListener {
-            openRecipesSidebar()
-        }
-
-        btnOpenMassdroid.setOnClickListener {
-            launchMassdroid()
-        }
 
         alertOverlay = findViewById(R.id.layout_alert_overlay)
         tvAlertIcon = findViewById(R.id.tv_alert_icon)
@@ -733,6 +724,13 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
+        val action = intent?.getStringExtra("action")
+        if (action == "open_recipes") {
+            openRecipesSidebar()
+        } else if (action == "open_music") {
+            launchMassdroid()
+        }
+
         val rtspUrl = intent?.getStringExtra("play_rtsp_url")
         if (rtspUrl != null) {
             if (rtspUrl.isNotEmpty() && rtspUrl.uppercase() != "OFF") {

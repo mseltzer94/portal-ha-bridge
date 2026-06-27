@@ -17,7 +17,7 @@ data class IntercomButton(
 )
 
 class Prefs(private val context: Context) {
-    private val sp = context.getSharedPreferences("portal_ha", Context.MODE_PRIVATE)
+    val sp = context.getSharedPreferences("portal_ha", Context.MODE_PRIVATE)
 
     // The service updates prefs in response to HA commands (camera on/off,
     // feature cascades); UI screens register here to stay in sync live.
@@ -245,6 +245,34 @@ class Prefs(private val context: Context) {
     var intercomTransparentBg: Boolean
         get() = sp.getBoolean("intercom_transparent_bg", false)
         set(v) = sp.edit().putBoolean("intercom_transparent_bg", v).apply()
+
+    var lastDisplayRtspUrl: String
+        get() = sp.getString("last_display_rtsp_url", "") ?: ""
+        set(v) = sp.edit().putString("last_display_rtsp_url", v).apply()
+
+    var cameraButtonX: Int
+        get() = sp.getInt("camera_btn_x", -1)
+        set(v) = sp.edit().putInt("camera_btn_x", v).apply()
+
+    var cameraButtonY: Int
+        get() = sp.getInt("camera_btn_y", -1)
+        set(v) = sp.edit().putInt("camera_btn_y", v).apply()
+
+    var recipesButtonX: Int
+        get() = sp.getInt("recipes_btn_x", -1)
+        set(v) = sp.edit().putInt("recipes_btn_x", v).apply()
+
+    var recipesButtonY: Int
+        get() = sp.getInt("recipes_btn_y", -1)
+        set(v) = sp.edit().putInt("recipes_btn_y", v).apply()
+
+    var musicButtonX: Int
+        get() = sp.getInt("music_btn_x", -1)
+        set(v) = sp.edit().putInt("music_btn_x", v).apply()
+
+    var musicButtonY: Int
+        get() = sp.getInt("music_btn_y", -1)
+        set(v) = sp.edit().putInt("music_btn_y", v).apply()
 
     val brokerUri: String get() = "tcp://$brokerHost:$brokerPort"
 }

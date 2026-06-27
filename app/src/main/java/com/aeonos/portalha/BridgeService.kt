@@ -2,6 +2,7 @@ package com.aeonos.portalha
 
 import android.app.*
 import android.content.*
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
@@ -51,6 +52,8 @@ class BridgeService : Service() {
         private const val EXTRA_ALERT_ID = "alert_id"
         private const val EXTRA_ALERT_ACTION = "alert_action"
         private const val ACTION_APPLY_INTERCOM = "com.aeonos.portalha.ACTION_APPLY_INTERCOM"
+        private const val ACTION_SET_DISPLAY_RTSP = "com.aeonos.portalha.SET_DISPLAY_RTSP"
+        private const val EXTRA_DISPLAY_RTSP = "display_rtsp"
 
         // Live reference to the running service so the dashboard UI + the PTT
         // overlay can query peers and drive the intercom directly (low latency,
@@ -80,6 +83,7 @@ class BridgeService : Service() {
         fun setDashboardForeground(fg: Boolean) {
             dashboardForeground = fg
             instance?.reconcileIntercomOverlays()
+            instance?.reconcileShortcutOverlays()
         }
 
         fun start(context: Context) =
@@ -118,6 +122,10 @@ class BridgeService : Service() {
         fun setDisplayUrl(context: Context, url: String) =
             context.startForegroundService(Intent(context, BridgeService::class.java)
                 .setAction(ACTION_SET_DISPLAY_URL).putExtra(EXTRA_DISPLAY_URL, url))
+
+        fun setDisplayRtsp(context: Context, url: String) =
+            context.startForegroundService(Intent(context, BridgeService::class.java)
+                .setAction(ACTION_SET_DISPLAY_RTSP).putExtra(EXTRA_DISPLAY_RTSP, url))
 
         fun setDisplayAlert(context: Context, payload: String) =
             context.startForegroundService(Intent(context, BridgeService::class.java)
@@ -159,6 +167,7 @@ class BridgeService : Service() {
     // Portal-to-Portal intercom (audio-only push-to-announce) + optional overlays.
     private var intercom: Intercom? = null
     private val intercomOverlays = mutableListOf<IntercomOverlay>()
+    private val shortcutOverlays = mutableListOf<FloatingShortcutOverlay>()
     @Volatile private var lastVolumePercent = -1
     @Volatile private var lastVolumeMuted = false
     @Volatile private var lastBrightnessPercent = -1
@@ -377,6 +386,15 @@ class BridgeService : Service() {
                 }.onFailure { Log.w(TAG, "in-app display URL setting failed: ${it.message}") }
             }
         }
+        if (intent?.action == ACTION_SET_DISPLAY_RTSP) {
+            val url = intent.getStringExtra(EXTRA_DISPLAY_RTSP) ?: "OFF"
+            val p = prefs ?: Prefs(this).also { prefs = it }
+            commandExecutor.submit {
+                runCatching {
+                    handleDisplayRtspCommand(url, p)
+                }.onFailure { Log.w(TAG, "in-app display RTSP toggle failed: ${it.message}") }
+            }
+        }
         if (intent?.action == ACTION_SET_DISPLAY_ALERT) {
             val payload = intent.getStringExtra(EXTRA_DISPLAY_ALERT) ?: "OFF"
             val p = prefs ?: Prefs(this).also { prefs = it }
@@ -411,6 +429,7 @@ class BridgeService : Service() {
         soundMonitor?.stop()
         intercom?.release()
         hideIntercomOverlays()
+        hideShortcutOverlays()
         instance = null
         cameraStream?.release()
         rtspStreamer?.stop()
@@ -1064,6 +1083,7 @@ class BridgeService : Service() {
                 startActivity(intent)
                 Log.i(TAG, "handleDisplayRtspCommand: started DashboardActivity with url extra")
             }.onFailure { Log.w(TAG, "failed to start DashboardActivity for RTSP: ${it.message}") }
+            reconcileShortcutOverlays()
         }
     }
 
@@ -1317,6 +1337,94 @@ class BridgeService : Service() {
     private fun hideIntercomOverlays() {
         intercomOverlays.forEach { it.hide() }
         intercomOverlays.clear()
+    }
+
+    private fun reconcileShortcutOverlays() {
+        val p = prefs ?: return
+        val show = dashboardForeground
+        if (!show) { hideShortcutOverlays(); return }
+        if (shortcutOverlays.isNotEmpty()) {
+            shortcutOverlays.forEach { it.refresh() }
+            return
+        }
+
+        // 1. Recipes Button (Bottom Left)
+        FloatingShortcutOverlay(
+            context = this,
+            label = { "🍽️ Recipes" },
+            prefsKeyX = "recipes_btn_x",
+            prefsKeyY = "recipes_btn_y",
+            defaultX = 16,
+            defaultY = 700,
+            defaultBgColor = Color.parseColor("#F59E0B"),
+            rightAlignByDefault = false,
+            onTap = {
+                runCatching {
+                    val intent = Intent(this, DashboardActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        putExtra("action", "open_recipes")
+                    }
+                    startActivity(intent)
+                }
+            }
+        ).also { shortcutOverlays.add(it); it.show() }
+
+        // 2. Music Button (Bottom Right)
+        FloatingShortcutOverlay(
+            context = this,
+            label = { "🎵 Music" },
+            prefsKeyX = "music_btn_x",
+            prefsKeyY = "music_btn_y",
+            defaultX = 16,
+            defaultY = 700,
+            defaultBgColor = Color.parseColor("#2563EB"),
+            rightAlignByDefault = true,
+            onTap = {
+                runCatching {
+                    val intent = Intent(this, DashboardActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                        putExtra("action", "open_music")
+                    }
+                    startActivity(intent)
+                }
+            }
+        ).also { shortcutOverlays.add(it); it.show() }
+
+        // 3. Camera Toggle Button (Left Edge, middle area, only if stream URL is populated)
+        val populatedUrl = p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF"
+        val lastPopulatedUrl = p.lastDisplayRtspUrl.isNotEmpty()
+        if (populatedUrl || lastPopulatedUrl) {
+            FloatingShortcutOverlay(
+                context = this,
+                label = { if (p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF") "📹 Cam ON" else "📹 Cam OFF" },
+                prefsKeyX = "camera_btn_x",
+                prefsKeyY = "camera_btn_y",
+                defaultX = 16,
+                defaultY = 550,
+                defaultBgColor = Color.parseColor("#424242"),
+                activeBgColor = Color.parseColor("#4CAF50"),
+                isActive = { p.displayRtspUrl.isNotEmpty() && p.displayRtspUrl.uppercase() != "OFF" },
+                rightAlignByDefault = false,
+                onTap = {
+                    val current = p.displayRtspUrl
+                    if (current.isNotEmpty() && current.uppercase() != "OFF") {
+                        p.lastDisplayRtspUrl = current
+                        setDisplayRtsp(this, "OFF")
+                    } else {
+                        val targetUrl = p.lastDisplayRtspUrl.ifEmpty { current }
+                        if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
+                            setDisplayRtsp(this, targetUrl)
+                        }
+                    }
+                    mainHandler.postDelayed({ reconcileShortcutOverlays() }, 200)
+                }
+            ).also { shortcutOverlays.add(it); it.show() }
+        }
+    }
+
+    private fun hideShortcutOverlays() {
+        shortcutOverlays.forEach { it.hide() }
+        shortcutOverlays.clear()
     }
 
     private fun retained(payload: String) =
