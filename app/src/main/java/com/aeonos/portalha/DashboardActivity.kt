@@ -509,9 +509,11 @@ class DashboardActivity : AppCompatActivity() {
             showUrlOverlay(displayUrl)
         }
 
-        // Resume Alert overlay if active
+        // Resume Alert overlay if active — but only if a native timer isn't
+        // already counting down (navigating away and back would restart it from scratch).
         val displayAlert = prefs.displayAlertPayload
-        if (displayAlert.isNotEmpty() && displayAlert.uppercase() != "OFF") {
+        if (displayAlert.isNotEmpty() && displayAlert.uppercase() != "OFF"
+                && nativeCountDownTimer == null) {
             showAlertOverlay(displayAlert)
         }
 
