@@ -306,21 +306,36 @@ class DashboardActivity : AppCompatActivity() {
             loadDashboard()
         }
 
-        val btnToggleCamera = findViewById<android.view.View>(R.id.btn_toggle_camera)
         val btnOpenRecipes = findViewById<android.view.View>(R.id.btn_open_recipes)
         val btnOpenMusic = findViewById<android.view.View>(R.id.btn_open_music)
+        val btnToggleCameraFront = findViewById<android.view.View>(R.id.btn_toggle_camera_front)
+        val btnToggleCameraBack = findViewById<android.view.View>(R.id.btn_toggle_camera_back)
 
-        btnToggleCamera.setOnClickListener {
+        btnToggleCameraFront.setOnClickListener {
             val current = prefs.displayRtspUrl
-            if (current.isNotEmpty() && current.uppercase() != "OFF") {
-                prefs.lastDisplayRtspUrl = current
+            val targetUrl = prefs.entranceRtspUrl
+            if (current.isNotEmpty() && current.uppercase() != "OFF" && current == targetUrl) {
                 BridgeService.setDisplayRtsp(this, "OFF")
             } else {
-                val targetUrl = prefs.lastDisplayRtspUrl.ifEmpty { prefs.defaultRtspUrl.ifEmpty { current } }
                 if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
                     BridgeService.setDisplayRtsp(this, targetUrl)
                 } else {
-                    android.widget.Toast.makeText(this, "RTSP Camera URL is not configured", android.widget.Toast.LENGTH_SHORT).show()
+                    android.widget.Toast.makeText(this, "Front Camera URL is not configured", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+            updateCameraBtnVisual()
+        }
+
+        btnToggleCameraBack.setOnClickListener {
+            val current = prefs.displayRtspUrl
+            val targetUrl = prefs.defaultRtspUrl
+            if (current.isNotEmpty() && current.uppercase() != "OFF" && current == targetUrl) {
+                BridgeService.setDisplayRtsp(this, "OFF")
+            } else {
+                if (targetUrl.isNotEmpty() && targetUrl.uppercase() != "OFF") {
+                    BridgeService.setDisplayRtsp(this, targetUrl)
+                } else {
+                    android.widget.Toast.makeText(this, "Back Camera URL is not configured", android.widget.Toast.LENGTH_SHORT).show()
                 }
             }
             updateCameraBtnVisual()
@@ -1563,13 +1578,22 @@ class DashboardActivity : AppCompatActivity() {
     }
 
     private fun updateCameraBtnVisual() {
-        val btnToggleCamera = findViewById<android.view.View>(R.id.btn_toggle_camera) ?: return
+        val btnToggleCameraFront = findViewById<android.view.View>(R.id.btn_toggle_camera_front)
+        val btnToggleCameraBack = findViewById<android.view.View>(R.id.btn_toggle_camera_back)
         val current = prefs.displayRtspUrl
-        val active = current.isNotEmpty() && current.uppercase() != "OFF"
-        if (active) {
-            btnToggleCamera.setBackgroundColor(Color.parseColor("#4CAF50")) // Green
-        } else {
-            btnToggleCamera.setBackgroundColor(Color.parseColor("#424242")) // Gray
+
+        val frontActive = current.isNotEmpty() && current.uppercase() != "OFF" && current == prefs.entranceRtspUrl
+        val backActive = current.isNotEmpty() && current.uppercase() != "OFF" && current == prefs.defaultRtspUrl
+
+        if (btnToggleCameraFront != null) {
+            btnToggleCameraFront.setBackgroundColor(
+                if (frontActive) Color.parseColor("#4CAF50") else Color.parseColor("#424242")
+            )
+        }
+        if (btnToggleCameraBack != null) {
+            btnToggleCameraBack.setBackgroundColor(
+                if (backActive) Color.parseColor("#4CAF50") else Color.parseColor("#424242")
+            )
         }
     }
 }
