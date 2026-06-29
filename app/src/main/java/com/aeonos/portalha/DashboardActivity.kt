@@ -47,6 +47,7 @@ class DashboardActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private var dismissRetries = 0
     private var player: androidx.media3.exoplayer.ExoPlayer? = null
+    private var playerListener: androidx.media3.common.Player.Listener? = null
     private lateinit var playerView: androidx.media3.ui.PlayerView
     private lateinit var overlayWebView: WebView
     private lateinit var btnCloseOverlay: ImageButton
@@ -919,16 +920,23 @@ class DashboardActivity : AppCompatActivity() {
         newPlayer.prepare()
         newPlayer.playWhenReady = true
 
-        newPlayer.addListener(object : androidx.media3.common.Player.Listener {
+        val listener = object : androidx.media3.common.Player.Listener {
             override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                android.util.Log.e("PortalHA", "ExoPlayer playback error: ${error.message}")
+                android.util.Log.e("PortalHA", "ExoPlayer playback error", error)
                 stopRtspStream()
             }
-        })
+        }
+        playerListener = listener
+        newPlayer.addListener(listener)
 
         player = newPlayer
         playerView.player = newPlayer
         updateCameraBtnVisual()
+
+        // Minimize active timer if one is running, so the camera view isn't blocked
+        if (nativeCountDownTimer != null && !nativeTimerIsMinimized) {
+            minimizeNativeTimer()
+        }
     }
 
     private fun toggleRecipesSidebar() {
@@ -1537,13 +1545,21 @@ class DashboardActivity : AppCompatActivity() {
 
     private fun stopRtspStream() {
         player?.let {
+            playerListener?.let { listener -> it.removeListener(listener) }
             it.stop()
             it.release()
         }
+        playerListener = null
         player = null
         playerView.player = null
         playerView.visibility = android.view.View.GONE
         updateCameraBtnVisual()
+
+        // Restore minimized timer to full screen when the stream stops
+        if (nativeCountDownTimer != null && nativeTimerIsMinimized) {
+            nativeTimerIsMinimized = false
+            updateTimerUI()
+        }
     }
 
     private fun updateCameraBtnVisual() {
