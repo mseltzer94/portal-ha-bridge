@@ -479,7 +479,17 @@ class BridgeService : Service() {
                         lastActivityMs = System.currentTimeMillis()  // restart the off-timer
                         publishState("ON"); reclaimForeground()
                     }
-                    Intent.ACTION_SCREEN_OFF -> { screenOn = false; publishState("OFF") }
+                    Intent.ACTION_SCREEN_OFF -> {
+                        screenOn = false
+                        publishState("OFF")
+                        val p = prefs
+                        if (p != null) {
+                            val currentRtsp = p.displayRtspUrl
+                            if (currentRtsp.isNotEmpty() && currentRtsp.uppercase() != "OFF") {
+                                handleDisplayRtspCommand("OFF", p)
+                            }
+                        }
+                    }
                 }
             }
         }
